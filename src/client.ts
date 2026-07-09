@@ -178,9 +178,13 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
       values: OdooRecord | ReadonlyArray<OdooRecord>,
     ): Effect.Effect<ReadonlyArray<number>, TransportCallError> => {
       const valsList = Array.isArray(values) ? values : [values];
-      return rpc
-        .callKw(model, "create", [], { vals_list: valsList })
-        .pipe(Effect.flatMap(decode(IdArray, `${model}.create`)));
+      // Dialect split (see TransportDialect): call_kw reads create's vals from
+      // args[0] unconditionally (16-19), while JSON-2 is keyword-only.
+      const call =
+        rpc.dialect === "json2"
+          ? rpc.callKw(model, "create", [], { vals_list: valsList })
+          : rpc.callKw(model, "create", [valsList]);
+      return call.pipe(Effect.flatMap(decode(IdArray, `${model}.create`)));
     };
 
     const write = (

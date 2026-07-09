@@ -1,5 +1,10 @@
 import { Effect, Layer, Ref } from "effect";
-import { type CallKwParams, Transport, type TransportCallError } from "../transport.ts";
+import {
+  type CallKwParams,
+  Transport,
+  type TransportCallError,
+  type TransportDialect,
+} from "../transport.ts";
 
 /**
  * A single scripted method. Receives the full {@link CallKwParams} of the
@@ -45,10 +50,14 @@ const isEffect = (
  * (with a precise locator), never a value in the typed failure channel. Tests
  * that mean to exercise a transport failure must script it explicitly.
  */
-export const make = (handlers: FakeHandlers): FakeTransport => {
+export const make = (
+  handlers: FakeHandlers,
+  options?: { readonly dialect?: TransportDialect },
+): FakeTransport => {
   const callLog = Ref.unsafeMake<ReadonlyArray<CallKwParams>>([]);
 
   const layer = Layer.succeed(Transport, {
+    dialect: options?.dialect ?? "execute-kw",
     callKw: (params: CallKwParams) =>
       Effect.gen(function* () {
         yield* Ref.update(callLog, (log) => [...log, params]);

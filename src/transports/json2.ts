@@ -121,10 +121,9 @@ const mapJson2Fault = (
     );
     const raw = rawFault(exc, status, site);
 
-    if (exc.name !== undefined) {
-      return yield* Effect.fail(mapServerFault(raw, site));
-    }
-
+    // GOTCHA: 401 is checked BEFORE the body name. Odoo 19 serializes a bad
+    // bearer key as werkzeug.exceptions.Unauthorized — an unmapped name that
+    // would otherwise fall through to OdooServerError instead of auth.
     if (status === 401) {
       return yield* Effect.fail(
         new OdooAuthenticationError({
@@ -132,6 +131,10 @@ const mapJson2Fault = (
           message: raw.message || "JSON-2 rejected the API key (HTTP 401).",
         }),
       );
+    }
+
+    if (exc.name !== undefined) {
+      return yield* Effect.fail(mapServerFault(raw, site));
     }
 
     const Ctor = byStatus[status] ?? OdooServerError;
@@ -221,7 +224,7 @@ export const make = (
       );
     };
 
-    return Transport.of({ callKw });
+    return Transport.of({ dialect: "json2", callKw });
   });
 
 /** The concrete subset of the transport failure channel JSON-2 produces. */

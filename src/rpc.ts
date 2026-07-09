@@ -1,5 +1,10 @@
 import { Context, Effect, Layer, Option } from "effect";
-import { type CallKwParams, Transport, type TransportCallError } from "./transport.ts";
+import {
+  type CallKwParams,
+  Transport,
+  type TransportCallError,
+  type TransportDialect,
+} from "./transport.ts";
 
 /** An Odoo `context` dict: opaque keys, values we do not model. */
 export type OdooContext = Record<string, unknown>;
@@ -34,6 +39,8 @@ export class GlobalContext extends Context.Tag("odoo-rpc-ts/GlobalContext")<
 export class Rpc extends Context.Tag("odoo-rpc-ts/Rpc")<
   Rpc,
   {
+    /** The underlying transport's wire dialect, for ops that must branch on it. */
+    readonly dialect: TransportDialect;
     /**
      * Execute one `call_kw`, merging the effective `context` and forwarding to
      * the {@link Transport}. Caller inputs are never mutated — `args`, `kwargs`,
@@ -112,7 +119,7 @@ export const layerWith = (config?: {
         return transport.callKw(params);
       };
 
-      return { callKw };
+      return { dialect: transport.dialect, callKw };
     }),
   );
 

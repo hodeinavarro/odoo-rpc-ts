@@ -11,7 +11,11 @@ const handlers: FakeTransport.FakeHandlers = {
     search: () => [1, 2, 3],
     read: () => [{ id: 1, name: "Alice" }],
     create: (params) =>
-      (params.kwargs["vals_list"] as ReadonlyArray<unknown>).map((_, i) => 10 + i),
+      // Accept both dialect encodings: positional args[0] (execute-kw) or
+      // kwargs.vals_list (json2).
+      ((params.args[0] ?? params.kwargs["vals_list"]) as ReadonlyArray<unknown>).map(
+        (_, i) => 10 + i,
+      ),
     write: () => true,
     unlink: () => true,
     fields_get: () => ({ name: { type: "char", string: "Name" } }),
@@ -103,9 +107,25 @@ describe("OdooClient ops", () => {
         OdooClient.pipe(Effect.flatMap((c) => c.create("res.partner", { name: "New" }))),
       );
       assert.deepStrictEqual(value, [10]);
-      // Keyword-only shape: no positional args, vals_list is a list even for one dict.
-      assert.deepStrictEqual(log[0]?.args, []);
+      // execute-kw dialect: vals travel positionally (call_kw reads args[0]),
+      // normalized to a list even for one dict.
+      assert.deepStrictEqual(log[0]?.args, [[{ name: "New" }]]);
       assert.strictEqual(log[0]?.ids, undefined);
+      assert.strictEqual(log[0]?.kwargs["vals_list"], undefined);
+    }),
+  );
+
+  it.effect("create uses the vals_list kwarg on a json2-dialect transport", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make(handlers, { dialect: "json2" });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const value = yield* Effect.provide(
+        OdooClient.pipe(Effect.flatMap((c) => c.create("res.partner", { name: "New" }))),
+        layer,
+      );
+      const log = yield* Ref.get(fake.callLog);
+      assert.deepStrictEqual(value, [10]);
+      assert.deepStrictEqual(log[0]?.args, []);
       assert.deepStrictEqual(log[0]?.kwargs["vals_list"], [{ name: "New" }]);
     }),
   );
@@ -118,7 +138,7 @@ describe("OdooClient ops", () => {
         ),
       );
       assert.deepStrictEqual(value, [10, 11]);
-      assert.deepStrictEqual(log[0]?.kwargs["vals_list"], [{ name: "A" }, { name: "B" }]);
+      assert.deepStrictEqual(log[0]?.args, [[{ name: "A" }, { name: "B" }]]);
     }),
   );
 

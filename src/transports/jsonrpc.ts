@@ -162,7 +162,7 @@ export const make = (
         );
       });
 
-    return { callKw };
+    return { dialect: "execute-kw" as const, callKw };
   });
 
 /**

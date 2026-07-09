@@ -70,7 +70,7 @@ export const make = (
         }),
       );
 
-    return { callKw };
+    return { dialect: "execute-kw" as const, callKw };
   });
 
 /** Provide the web `Transport` from an already-resolved config. Requires `CookieSession`. */

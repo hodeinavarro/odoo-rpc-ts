@@ -170,6 +170,17 @@ arguments, context, debug}`. Status map: 401 no/bad bearer, 403
   first positional argument. High-level ops pass everything else as *named*
   kwargs (`fields`, `vals`, `vals_list`, `domain` — stable Python parameter
   names on 16–19), so every `OdooClient` op works over every transport.
+- **Transports declare a `dialect` (`"execute-kw" | "json2"`), verified live:**
+  Odoo's `call_kw` reads `create`'s vals from `args[0]` *unconditionally*
+  (16–19), while JSON-2 binds kwargs by signature — so `create` cannot have
+  one encoding. `OdooClient` (which owns method semantics) branches on
+  `Rpc.dialect`; a transport itself never reorders args.
+- **Live-verified wire quirks:** JSON-2 serializes a bad bearer key as
+  `werkzeug.exceptions.Unauthorized` — the 401 status must be checked before
+  the body `name` at the choke point. JSON-2 `read` of missing ids succeeds
+  with `[]` (the ORM skips them); `write` is what raises `MissingError`.
+  `res.partner.comment` is an Html field — the server wraps values in `<p>`,
+  so integration round-trips use Char fields.
 
 ## Version support matrix (16.0 – 19.0)
 

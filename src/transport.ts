@@ -40,6 +40,15 @@ export type TransportCallError =
   | OdooServerFault;
 
 /**
+ * How a transport encodes calls on the wire. High-level ops that know a
+ * method's Python semantics branch on this — a transport itself never reorders
+ * args. The one live case: `create` vals MUST be positional over the
+ * execute_kw family (Odoo's `call_kw` reads `args[0]` unconditionally, 16–19)
+ * but keyword-only (`vals_list`) over JSON-2.
+ */
+export type TransportDialect = "execute-kw" | "json2";
+
+/**
  * The one seam every protocol implements. `JsonRpcTransport`, `Json2Transport`,
  * and the cookie-session `WebTransport` all provide this tag; application code
  * depends only on it and stays protocol-agnostic.
@@ -47,6 +56,9 @@ export type TransportCallError =
 export class Transport extends Context.Tag("odoo-rpc-ts/Transport")<
   Transport,
   {
+    /** The wire dialect — see {@link TransportDialect}. */
+    readonly dialect: TransportDialect;
+
     /**
      * Execute one `call_kw`-shaped round trip and return the raw, still-undecoded
      * result (callers decode through `effect/Schema` at their boundary).
