@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # minimumReleaseAge (pnpm's supply-chain cooldown) can refuse freshly
+      # published versions in the lockfile on CI; --config.minimumReleaseAge=0
+      # disables the cooldown for this deterministic, frozen-lockfile install.
+      - name: Install
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+  integration:
+    name: integration (${{ matrix.version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["16.0", "17.0", "18.0", "19.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+
+      - name: Bring up the Odoo ${{ matrix.version }} harness
+        run: pnpm harness up ${{ matrix.version }}
+
+      # The harness writes a .env-format state file; export every key into the
+      # job env so the integration runner sees ODOO_URL/ODOO_DB/... as vars.
+      - name: Load harness state into the environment
+        run: cat harness/.state/${{ matrix.version }}/env >> "$GITHUB_ENV"
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Tear down the harness
+        if: always()
+        run: pnpm harness down
