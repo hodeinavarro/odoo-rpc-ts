@@ -60,10 +60,10 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
      * `search_read(domain, fields, offset, limit, order)` — search and read in
      * one round trip. Rows decode through `schema` (default: unknown record).
      */
-    readonly searchRead: <A = OdooRecord>(
+    readonly searchRead: <A = OdooRecord, I = A>(
       model: string,
       options?: SearchReadOptions,
-      schema?: Schema.Schema<A, A>,
+      schema?: Schema.Schema<A, I>,
     ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
 
     /** `search(domain, offset, limit, order)` — matching record ids. */
@@ -126,12 +126,14 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
     const withContext = (context?: OdooContext) =>
       context === undefined ? undefined : { context };
 
-    const searchRead = <A = OdooRecord>(
+    const searchRead = <A = OdooRecord, I = A>(
       model: string,
       options?: SearchReadOptions,
-      schema?: Schema.Schema<A, A>,
+      schema?: Schema.Schema<A, I>,
     ): Effect.Effect<ReadonlyArray<A>, TransportCallError> => {
-      const rowSchema = (schema ?? UnknownRecord) as Schema.Schema<A, A>;
+      // Rows decode FROM the wire shape (I) TO the domain shape (A), so
+      // transforming schemas (DateFromString, false->null, ...) are first-class.
+      const rowSchema = (schema ?? UnknownRecord) as Schema.Schema<A, I>;
       const kwargs = compact({
         domain: normalizeDomain(options?.domain ?? []),
         fields: options?.fields,

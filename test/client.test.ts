@@ -41,6 +41,33 @@ const withLog = <A, E>(
   });
 
 describe("OdooClient ops", () => {
+  it.effect("searchRead accepts a transforming schema (I != A)", () =>
+    Effect.gen(function* () {
+      // Odoo sends `false` for empty scalar fields; normalize to null while
+      // decoding — only possible when the schema may transform (Schema<A, I>).
+      const Row = Schema.Struct({
+        id: Schema.Number,
+        email: Schema.transform(
+          Schema.Union(Schema.String, Schema.Literal(false)),
+          Schema.NullOr(Schema.String),
+          {
+            decode: (raw) => (raw === false ? null : raw),
+            encode: (email) => email ?? (false as const),
+          },
+        ),
+      });
+      const fake = FakeTransport.make({
+        "res.partner": { search_read: () => [{ id: 7, email: false }] },
+      });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const rows = yield* Effect.provide(
+        OdooClient.pipe(Effect.flatMap((c) => c.searchRead("res.partner", {}, Row))),
+        layer,
+      );
+      assert.deepStrictEqual(rows, [{ id: 7, email: null }]);
+    }),
+  );
+
   it.effect("searchRead decodes rows (default unknown record)", () =>
     Effect.gen(function* () {
       const rows = yield* run(OdooClient.pipe(Effect.flatMap((c) => c.searchRead("res.partner"))));
