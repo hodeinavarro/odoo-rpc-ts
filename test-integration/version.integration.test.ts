@@ -6,11 +6,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { NodeHttpClient } from "@effect/platform-node";
-import {
-  JsonRpcTransport,
-  VersionResolver,
-  VersionResolverLive,
-} from "../src/index.ts";
+import { JsonRpcTransport, VersionResolver, VersionResolverLive } from "../src/index.ts";
 import { apiKeyConfig, hasStack, majorVersion, TIMEOUT_MS } from "./support.ts";
 
 /**

@@ -5,7 +5,12 @@ import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
 import { HttpClientRequest } from "../internal/platform.ts";
 import { CookieSession } from "../session/cookie.ts";
 import { joinPath } from "../session/cookie.ts";
-import { buildRequest, JsonRpcResponse, mapJsonRpcError, nextRequestId } from "../protocol/jsonrpc.ts";
+import {
+  buildRequest,
+  JsonRpcResponse,
+  mapJsonRpcError,
+  nextRequestId,
+} from "../protocol/jsonrpc.ts";
 import { type CallKwParams, Transport, type TransportCallError } from "../transport.ts";
 
 /**
@@ -13,9 +18,7 @@ import { type CallKwParams, Transport, type TransportCallError } from "../transp
  * cookie session exists (via {@link CookieSession}) and then rides the shared,
  * cookie-bound HttpClient so `session_id` — and any rotation — is always sent.
  */
-export const make = (
-  config: OdooConfig,
-): Effect.Effect<Transport["Type"], never, CookieSession> =>
+export const make = (config: OdooConfig): Effect.Effect<Transport["Type"], never, CookieSession> =>
   Effect.gen(function* () {
     const session = yield* CookieSession;
     const callUrl = joinPath(config.url, "web/dataset/call_kw");
@@ -50,7 +53,12 @@ export const make = (
 
         const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
           Effect.mapError(
-            (cause) => new SchemaDriftError({ context: "web/dataset/call_kw envelope", payload: body, cause }),
+            (cause) =>
+              new SchemaDriftError({
+                context: "web/dataset/call_kw envelope",
+                payload: body,
+                cause,
+              }),
           ),
         );
 
@@ -78,7 +86,5 @@ export const layer = (config: OdooConfig): Layer.Layer<Transport, never, CookieS
   Layer.effect(Transport, make(config));
 
 /** Provide the web `Transport`, resolving `OdooConfig` from the environment. */
-export const layerConfig: Layer.Layer<Transport, ConfigError.ConfigError, CookieSession> = Layer.effect(
-  Transport,
-  Effect.flatMap(OdooConfig, make),
-);
+export const layerConfig: Layer.Layer<Transport, ConfigError.ConfigError, CookieSession> =
+  Layer.effect(Transport, Effect.flatMap(OdooConfig, make));

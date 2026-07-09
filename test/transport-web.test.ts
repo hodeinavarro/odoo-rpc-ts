@@ -16,7 +16,10 @@ interface Recorder {
   readonly urls: Array<string>;
 }
 
-const fakeHttpClient = (script: ReadonlyArray<Canned>, rec: Recorder): Layer.Layer<HttpClient.HttpClient> => {
+const fakeHttpClient = (
+  script: ReadonlyArray<Canned>,
+  rec: Recorder,
+): Layer.Layer<HttpClient.HttpClient> => {
   let i = 0;
   const client = HttpClient.make((request) => {
     const canned = script[Math.min(i, script.length - 1)];
@@ -39,7 +42,11 @@ const config: OdooConfig = {
   credentials: { _tag: "ApiKey", username: "svc", apiKey: Redacted.make("secret-key") },
 };
 
-const login = { jsonrpc: "2.0", id: 1, result: { uid: 7, user_context: {}, server_version_info: [17] } };
+const login = {
+  jsonrpc: "2.0",
+  id: 1,
+  result: { uid: 7, user_context: {}, server_version_info: [17] },
+};
 
 const stack = (script: ReadonlyArray<Canned>, rec: Recorder) =>
   WebTransport.layer(config).pipe(
@@ -93,15 +100,16 @@ describe("WebTransport", () => {
           }
         }
         const isLogin = request.url.endsWith("authenticate");
-        const payload = isLogin
-          ? login
-          : { jsonrpc: "2.0", id: 2, result: true };
+        const payload = isLogin ? login : { jsonrpc: "2.0", id: 2, result: true };
         const headers = new Headers({ "content-type": "application/json" });
         if (isLogin) {
           headers.append("set-cookie", "session_id=abc; Path=/");
         }
         return Effect.succeed(
-          HttpClientResponse.fromWeb(request, new Response(JSON.stringify(payload), { status: 200, headers })),
+          HttpClientResponse.fromWeb(
+            request,
+            new Response(JSON.stringify(payload), { status: 200, headers }),
+          ),
         );
       }),
     );
@@ -187,7 +195,11 @@ describe("WebTransport", () => {
                 error: {
                   code: 200,
                   message: "Odoo Server Error",
-                  data: { name: "odoo.exceptions.ValidationError", message: "bad value", arguments: ["bad value"] },
+                  data: {
+                    name: "odoo.exceptions.ValidationError",
+                    message: "bad value",
+                    arguments: ["bad value"],
+                  },
                 },
               },
             },

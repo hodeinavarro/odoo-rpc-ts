@@ -33,15 +33,26 @@ const config: OdooConfig = {
   credentials: { _tag: "ApiKey", username: "svc", apiKey: Redacted.make("secret-key") },
 };
 
-const login = { jsonrpc: "2.0", id: 1, result: { uid: 7, user_context: {}, server_version_info: [17] } };
+const login = {
+  jsonrpc: "2.0",
+  id: 1,
+  result: { uid: 7, user_context: {}, server_version_info: [17] },
+};
 const expired = {
   jsonrpc: "2.0",
   id: 2,
-  error: { code: 100, message: "Session expired", data: { name: "odoo.http.SessionExpiredException" } },
+  error: {
+    code: 100,
+    message: "Session expired",
+    data: { name: "odoo.http.SessionExpiredException" },
+  },
 };
 
 const stack = (script: ReadonlyArray<Canned>) =>
-  webLayer(config).pipe(Layer.provideMerge(cookieLayer(config)), Layer.provide(fakeHttpClient(script)));
+  webLayer(config).pipe(
+    Layer.provideMerge(cookieLayer(config)),
+    Layer.provide(fakeHttpClient(script)),
+  );
 
 const call = Effect.gen(function* () {
   const transport = yield* Transport;

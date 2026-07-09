@@ -26,8 +26,7 @@ services:
     # db port is intentionally NOT published — no host-level collision between
     # versions, and nothing outside the compose network needs Postgres directly.
     healthcheck:
-      test:
-        ["CMD", "pg_isready", "-U", "${ODOO_HARNESS_DB_USER:-odoo}", "-d", "postgres"]
+      test: ["CMD", "pg_isready", "-U", "${ODOO_HARNESS_DB_USER:-odoo}", "-d", "postgres"]
       interval: 5s
       timeout: 5s
       retries: 20

@@ -69,9 +69,7 @@ describe.skipIf(!hasStack)("jsonrpc (live)", () => {
 
         const ids = yield* client
           .create("res.partner", { name })
-          .pipe(
-            Effect.tap((created) => Effect.sync(() => assert.strictEqual(created.length, 1))),
-          );
+          .pipe(Effect.tap((created) => Effect.sync(() => assert.strictEqual(created.length, 1))));
 
         yield* Effect.gen(function* () {
           // write updates a field and returns `true`.

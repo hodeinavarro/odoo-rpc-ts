@@ -15,13 +15,7 @@ import {
   WebTransport,
   retryOnSessionExpired,
 } from "../src/index.ts";
-import {
-  badPasswordConfig,
-  hasStack,
-  marker,
-  passwordConfig,
-  TIMEOUT_MS,
-} from "./support.ts";
+import { badPasswordConfig, hasStack, marker, passwordConfig, TIMEOUT_MS } from "./support.ts";
 
 /** Just the cookie session (login-only specs). */
 const sessionLayer = (config = passwordConfig()): Layer.Layer<CookieSession> =>

@@ -40,34 +40,47 @@ describe("Rpc.callKw — context merge", () => {
     }),
   );
 
-  it.effect("treats kwargs.context as a caller tier: base < layer < kwargs.context < options.context", () =>
-    Effect.gen(function* () {
-      const fake = FakeTransport.make({ m: { ping: () => true } });
-      const layer = layerWith({ globalContext: { b: "layer", c: "layer", d: "layer" } }).pipe(
-        Layer.provide(fake.layer),
-        Layer.provide(Layer.succeed(GlobalContext, { a: "base", b: "base", c: "base", d: "base" })),
-      );
+  it.effect(
+    "treats kwargs.context as a caller tier: base < layer < kwargs.context < options.context",
+    () =>
+      Effect.gen(function* () {
+        const fake = FakeTransport.make({ m: { ping: () => true } });
+        const layer = layerWith({ globalContext: { b: "layer", c: "layer", d: "layer" } }).pipe(
+          Layer.provide(fake.layer),
+          Layer.provide(
+            Layer.succeed(GlobalContext, { a: "base", b: "base", c: "base", d: "base" }),
+          ),
+        );
 
-      yield* Rpc.pipe(
-        Effect.flatMap((rpc) =>
-          rpc.callKw("m", "ping", [], { x: 1, context: { c: "kwargs", d: "kwargs" } }, {
-            context: { d: "options" },
-          }),
-        ),
-        Effect.provide(layer),
-      );
+        yield* Rpc.pipe(
+          Effect.flatMap((rpc) =>
+            rpc.callKw(
+              "m",
+              "ping",
+              [],
+              { x: 1, context: { c: "kwargs", d: "kwargs" } },
+              {
+                context: { d: "options" },
+              },
+            ),
+          ),
+          Effect.provide(layer),
+        );
 
-      const log = yield* Ref.get(fake.callLog);
-      // kwargs.context beats layer for `c`; options.context beats kwargs.context for `d`.
-      assert.deepStrictEqual(lastContext(log), {
-        a: "base",
-        b: "layer",
-        c: "kwargs",
-        d: "options",
-      });
-      // context is stripped from kwargs, never wired twice.
-      assert.deepStrictEqual(log[0]?.kwargs, { x: 1, context: { a: "base", b: "layer", c: "kwargs", d: "options" } });
-    }),
+        const log = yield* Ref.get(fake.callLog);
+        // kwargs.context beats layer for `c`; options.context beats kwargs.context for `d`.
+        assert.deepStrictEqual(lastContext(log), {
+          a: "base",
+          b: "layer",
+          c: "kwargs",
+          d: "options",
+        });
+        // context is stripped from kwargs, never wired twice.
+        assert.deepStrictEqual(log[0]?.kwargs, {
+          x: 1,
+          context: { a: "base", b: "layer", c: "kwargs", d: "options" },
+        });
+      }),
   );
 
   it.effect("dies when kwargs.context is present but not a plain object", () =>

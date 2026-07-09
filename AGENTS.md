@@ -167,11 +167,11 @@ arguments, context, debug}`. Status map: 401 no/bad bearer, 403
 - **`ids` is first-class on the seam (decision 2026-07-09):** `CallKwParams`
   carries an optional `ids` (the browse target). JSON-2 sends it as its
   special `ids` body key; execute_kw-family transports prepend it as the
-  first positional argument. High-level ops pass everything else as *named*
+  first positional argument. High-level ops pass everything else as _named_
   kwargs (`fields`, `vals`, `vals_list`, `domain` — stable Python parameter
   names on 16–19), so every `OdooClient` op works over every transport.
 - **Transports declare a `dialect` (`"execute-kw" | "json2"`), verified live:**
-  Odoo's `call_kw` reads `create`'s vals from `args[0]` *unconditionally*
+  Odoo's `call_kw` reads `create`'s vals from `args[0]` _unconditionally_
   (16–19), while JSON-2 binds kwargs by signature — so `create` cannot have
   one encoding. `OdooClient` (which owns method semantics) branches on
   `Rpc.dialect`; a transport itself never reorders args.

@@ -7,7 +7,12 @@ import type { SessionExpiredError } from "../errors/session.ts";
 import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
 import { Cookies, HttpClient, HttpClientRequest } from "../internal/platform.ts";
 import * as SingleFlight from "../internal/singleFlight.ts";
-import { buildRequest, JsonRpcResponse, mapJsonRpcError, nextRequestId } from "../protocol/jsonrpc.ts";
+import {
+  buildRequest,
+  JsonRpcResponse,
+  mapJsonRpcError,
+  nextRequestId,
+} from "../protocol/jsonrpc.ts";
 
 /**
  * Join a request path onto the configured base URL, preserving any base path
@@ -116,7 +121,11 @@ export const make = (
       const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
         Effect.mapError(
           (cause) =>
-            new SchemaDriftError({ context: "web/session/authenticate envelope", payload: body, cause }),
+            new SchemaDriftError({
+              context: "web/session/authenticate envelope",
+              payload: body,
+              cause,
+            }),
         ),
       );
 
@@ -127,7 +136,11 @@ export const make = (
       const info = yield* Schema.decodeUnknown(SessionInfoSchema)(decoded.result).pipe(
         Effect.mapError(
           (cause) =>
-            new SchemaDriftError({ context: "web/session/authenticate session_info", payload: decoded.result, cause }),
+            new SchemaDriftError({
+              context: "web/session/authenticate session_info",
+              payload: decoded.result,
+              cause,
+            }),
         ),
       );
 
@@ -172,7 +185,9 @@ export const make = (
   });
 
 /** Provide `CookieSession` from an already-resolved config. Requires `HttpClient`. */
-export const layer = (config: OdooConfig): Layer.Layer<CookieSession, never, HttpClient.HttpClient> =>
+export const layer = (
+  config: OdooConfig,
+): Layer.Layer<CookieSession, never, HttpClient.HttpClient> =>
   Layer.effect(CookieSession, make(config));
 
 /** Provide `CookieSession`, resolving `OdooConfig` from the environment. */
@@ -180,7 +195,4 @@ export const layerConfig: Layer.Layer<
   CookieSession,
   ConfigError.ConfigError,
   HttpClient.HttpClient
-> = Layer.effect(
-  CookieSession,
-  Effect.flatMap(OdooConfig, make),
-);
+> = Layer.effect(CookieSession, Effect.flatMap(OdooConfig, make));

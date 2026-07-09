@@ -241,7 +241,9 @@ function status() {
     const c = ctx(version);
     const running = odooRunning(c) ? "yes" : "no ";
     const seeded = existsSync(c.stateFile) ? "yes" : "no ";
-    console.log(`${version.padEnd(8)} ${running.padEnd(8)} ${seeded.padEnd(7)} http://localhost:${c.port}`);
+    console.log(
+      `${version.padEnd(8)} ${running.padEnd(8)} ${seeded.padEnd(7)} http://localhost:${c.port}`,
+    );
   }
 }
 

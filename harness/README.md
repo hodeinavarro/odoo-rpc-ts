@@ -22,7 +22,7 @@ db credentials are templated into `odoo.conf` at container start via `envsubst`
 (from the compose `environment:` block) — not hardcoded.
 
 | version | host port |
-|---------|-----------|
+| ------- | --------- |
 | 16.0    | 8016      |
 | 17.0    | 8017      |
 | 18.0    | 8018      |

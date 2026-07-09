@@ -18,7 +18,10 @@ interface Recorder {
   readonly urls: Array<string>;
 }
 
-const fakeHttpClient = (script: ReadonlyArray<Canned>, rec: Recorder): Layer.Layer<HttpClient.HttpClient> => {
+const fakeHttpClient = (
+  script: ReadonlyArray<Canned>,
+  rec: Recorder,
+): Layer.Layer<HttpClient.HttpClient> => {
   let i = 0;
   const client = HttpClient.make((request) => {
     const canned = script[Math.min(i, script.length - 1)];
@@ -99,7 +102,9 @@ describe("CookieSession", () => {
     Effect.gen(function* () {
       const rec: Recorder = { sentCookies: [], urls: [] };
       const session = yield* make(config).pipe(
-        Effect.provide(fakeHttpClient([{ body: sessionInfo(7), setCookie: "session_id=abc; Path=/" }], rec)),
+        Effect.provide(
+          fakeHttpClient([{ body: sessionInfo(7), setCookie: "session_id=abc; Path=/" }], rec),
+        ),
       );
 
       const first = yield* session.login;
