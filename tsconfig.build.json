@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // Source uses .ts relative specifiers (no-build-step dev via Node type
+    // stripping); emit rewrites them to .js so dist is plain runnable ESM.
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src"]
+}

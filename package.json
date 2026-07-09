@@ -1,15 +1,42 @@
 {
   "name": "odoo-rpc-ts",
-  "version": "0.0.0",
-  "private": true,
-  "description": "A modern, Effect-native, strongly-typed Odoo RPC client for TypeScript.",
+  "version": "0.1.0",
+  "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript — JSON-RPC, JSON-2, and cookie-session transports for Odoo 16–19 with a tagged-error taxonomy.",
+  "keywords": [
+    "api-client",
+    "effect",
+    "effect-ts",
+    "erp",
+    "json-rpc",
+    "odoo",
+    "rpc",
+    "typescript"
+  ],
+  "license": "MIT",
+  "author": "Hodei Navarro",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hodeinavarro/odoo-rpc-ts.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts",
-    "./testing": "./src/testing/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
   },
   "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/fix-dts-extensions.mjs",
+    "prepack": "pnpm build",
     "check": "tsc --noEmit",
     "harness": "node harness/cli.mjs",
     "test": "vitest run",
