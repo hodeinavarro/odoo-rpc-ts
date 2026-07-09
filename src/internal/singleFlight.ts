@@ -9,6 +9,21 @@ export interface SingleFlight<A, E, R> {
    * of `Effect.cached` (which would also memoize failures).
    */
   readonly get: Effect.Effect<A, E, R>;
+  /**
+   * Drop the cached value so the next `get` re-acquires.
+   *
+   * GOTCHA: an acquire already in flight when `invalidate` runs will complete
+   * and be returned to ITS caller, but is NOT cached — a generation counter
+   * guards the write, so a stale result can never resurrect the cache.
+   */
+  readonly invalidate: Effect.Effect<void>;
+  /** The current cached value, without triggering an acquire. */
+  readonly peek: Effect.Effect<Option.Option<A>>;
+}
+
+interface State<A> {
+  readonly generation: number;
+  readonly value: Option.Option<A>;
 }
 
 /**
@@ -21,14 +36,14 @@ export const make = <A, E, R>(
   acquire: Effect.Effect<A, E, R>,
 ): Effect.Effect<SingleFlight<A, E, R>, never, never> =>
   Effect.gen(function* () {
-    const ref = yield* Ref.make(Option.none<A>());
+    const ref = yield* Ref.make<State<A>>({ generation: 0, value: Option.none() });
     const semaphore = yield* Effect.makeSemaphore(1);
 
     const get: Effect.Effect<A, E, R> = Effect.gen(function* () {
       // Fast path: already cached, no lock needed.
       const cached = yield* Ref.get(ref);
-      if (Option.isSome(cached)) {
-        return cached.value;
+      if (Option.isSome(cached.value)) {
+        return cached.value.value;
       }
 
       // Slow path: serialize acquisition behind the single permit.
@@ -36,17 +51,30 @@ export const make = <A, E, R>(
         Effect.gen(function* () {
           // Double-check: a racing caller may have filled the cache while we
           // waited for the permit.
-          const again = yield* Ref.get(ref);
-          if (Option.isSome(again)) {
-            return again.value;
+          const state = yield* Ref.get(ref);
+          if (Option.isSome(state.value)) {
+            return state.value.value;
           }
 
+          const startGeneration = state.generation;
           const value = yield* acquire;
-          yield* Ref.set(ref, Option.some(value));
+          // Cache only if no invalidate happened while we were acquiring.
+          yield* Ref.update(ref, (current) =>
+            current.generation === startGeneration
+              ? { generation: current.generation, value: Option.some(value) }
+              : current,
+          );
           return value;
         }),
       );
     });
 
-    return { get };
+    const invalidate = Ref.update(ref, (current) => ({
+      generation: current.generation + 1,
+      value: Option.none<A>(),
+    }));
+
+    const peek = Ref.get(ref).pipe(Effect.map((state) => state.value));
+
+    return { get, invalidate, peek };
   });

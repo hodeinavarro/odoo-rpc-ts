@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Redacted } from "effect";
+import { Effect, Layer, Redacted } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientResponse } from "../src/internal/platform.ts";
 import * as JsonRpc from "../src/transports/jsonrpc.ts";
@@ -283,6 +283,45 @@ describe("JsonRpcTransport.makeVersion", () => {
       assert.strictEqual(version.server_version, "17.0");
       assert.strictEqual(stub.calls[0]?.service, "common");
       assert.strictEqual(stub.calls[0]?.method, "version");
+    }),
+  );
+});
+
+describe("JsonRpcTransport auth self-healing", () => {
+  it.effect("an auth fault invalidates the cached uid so the next call re-authenticates", () =>
+    Effect.gen(function* () {
+      let denyOnce = true;
+      const stub = stubHttpClient((req) => {
+        if (req.service === "common" && req.method === "authenticate") {
+          return ok(7);
+        }
+        if (denyOnce) {
+          denyOnce = false;
+          return fault(200, "Odoo Server Error", {
+            name: "odoo.exceptions.AccessDenied",
+            message: "Access Denied",
+            arguments: ["Access Denied"],
+            context: {},
+          });
+        }
+        return ok(["fine"]);
+      });
+      const transport = yield* JsonRpc.make(config).pipe(
+        Effect.provide(Layer.succeed(HttpClient.HttpClient, stub.client)),
+      );
+
+      const params = { model: "res.partner", method: "read", args: [], kwargs: {} };
+      const error = yield* transport.callKw(params).pipe(Effect.flip);
+      assert.strictEqual(error._tag, "OdooAuthenticationError");
+
+      // Self-healing: the uid cache was dropped, so the retry re-authenticates
+      // (a second common.authenticate round trip) and succeeds.
+      const result = yield* transport.callKw(params);
+      assert.deepStrictEqual(result, ["fine"]);
+      const authCalls = stub.calls.filter(
+        (c) => c.service === "common" && c.method === "authenticate",
+      );
+      assert.strictEqual(authCalls.length, 2);
     }),
   );
 });

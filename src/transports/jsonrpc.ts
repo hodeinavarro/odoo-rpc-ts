@@ -160,7 +160,16 @@ export const make = (
           { model: params.model, method: params.method },
           { model: params.model, method: params.method },
         );
-      });
+      }).pipe(
+        // Self-healing: an auth fault means the cached uid/credential pairing is
+        // no longer valid server-side (key revoked-then-restored, credentials
+        // out of sync, ...). Drop the cache so the next call re-authenticates
+        // instead of staying wedged until the layer is rebuilt — symmetric with
+        // CookieSession.invalidate.
+        Effect.tapError((error) =>
+          error._tag === "OdooAuthenticationError" ? uid.invalidate : Effect.void,
+        ),
+      );
 
     return { dialect: "execute-kw" as const, callKw };
   });

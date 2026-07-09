@@ -89,8 +89,6 @@ export const make = (
     const cookies = yield* Ref.make(Cookies.empty);
     const client = HttpClient.withCookiesRef(baseClient, cookies);
 
-    const stateRef = yield* Ref.make(Option.none<OdooSessionInfo>());
-
     const authUrl = joinPath(config.url, "web/session/authenticate");
     const request: RequestInfo = { method: "POST", url: authUrl };
 
@@ -151,30 +149,25 @@ export const make = (
             ? (decoded.result as Record<string, unknown>)
             : {},
       };
-      yield* Ref.set(stateRef, Option.some(session));
       return session;
     });
 
-    // Store the single-flight itself in a Ref so `invalidate` can swap in a
-    // fresh one — the internal SingleFlight is deliberately reset-free, so a
-    // relogin means a new flight, never a mutated cache.
-    const makeFlight = SingleFlight.make(doLogin);
-    const flightRef = yield* Ref.make(yield* makeFlight);
-
-    const login = Ref.get(flightRef).pipe(Effect.flatMap((flight) => flight.get));
+    // The flight owns both caching and invalidation. Its generation counter
+    // guarantees a login already in flight when `invalidate` runs cannot
+    // resurrect the cache with a stale session (its caller still gets it).
+    const flight = yield* SingleFlight.make(doLogin);
 
     const invalidate = Effect.gen(function* () {
       yield* Ref.set(cookies, Cookies.empty);
-      yield* Ref.set(stateRef, Option.none());
-      yield* Ref.set(flightRef, yield* makeFlight);
+      yield* flight.invalidate;
     });
 
     return {
-      login,
+      login: flight.get,
       invalidate,
       cookies,
       client,
-      peek: Ref.get(stateRef),
+      peek: flight.peek,
     };
   });
 

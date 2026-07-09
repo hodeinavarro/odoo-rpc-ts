@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
+import { Deferred, Effect, Fiber, Layer, Option, Redacted } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "../src/internal/platform.ts";
 import { make } from "../src/session/cookie.ts";
@@ -54,6 +54,47 @@ const sessionInfo = (uid: number | null) => ({
 });
 
 describe("CookieSession", () => {
+  it.effect("invalidate racing an in-flight login cannot resurrect the session", () =>
+    Effect.gen(function* () {
+      const rec: Recorder = { sentCookies: [], urls: [] };
+      const gate = yield* Deferred.make<void>();
+      let call = 0;
+      // A gated client: the FIRST authenticate blocks until released, so
+      // `invalidate` can run inside the login window.
+      const gated = HttpClient.make((request) =>
+        Effect.gen(function* () {
+          call += 1;
+          rec.urls.push(request.url);
+          if (call === 1) {
+            yield* Deferred.await(gate);
+          }
+          const headers = new Headers({ "content-type": "application/json" });
+          headers.append("set-cookie", `session_id=s${call}; Path=/`);
+          const web = new Response(JSON.stringify(sessionInfo(7)), { status: 200, headers });
+          return HttpClientResponse.fromWeb(request, web);
+        }),
+      );
+      const session = yield* make(config).pipe(
+        Effect.provide(Layer.succeed(HttpClient.HttpClient, gated)),
+      );
+
+      const inFlight = yield* Effect.fork(session.login);
+      yield* Effect.yieldNow();
+
+      // Invalidate mid-login, then let the login finish.
+      yield* session.invalidate;
+      yield* Deferred.succeed(gate, undefined);
+      const stale = yield* Fiber.join(inFlight);
+      assert.strictEqual(stale.uid, 7); // its caller still gets a session...
+
+      // ...but nothing was cached: peek is empty and the next login
+      // re-authenticates (a second round trip).
+      assert.deepStrictEqual(yield* session.peek, Option.none());
+      yield* session.login;
+      assert.strictEqual(rec.urls.length, 2);
+    }),
+  );
+
   it.effect("logs in once (single-flight) and decodes session_info leniently", () =>
     Effect.gen(function* () {
       const rec: Recorder = { sentCookies: [], urls: [] };
