@@ -1,0 +1,67 @@
+# Disposable integration harness for odoo-rpc-ts — one PARAMETERIZED stack that
+# runs any supported Odoo major (16.0 | 17.0 | 18.0 | 19.0) against FRESH upstream
+# odoo/odoo source. Everything that could collide between two concurrently-running
+# versions is keyed off ${ODOO_HARNESS_VERSION} and its major, so e.g.
+#   ODOO_HARNESS_VERSION=16.0 docker compose ... up   (project odoo-rpc-ts-16, :8016)
+#   ODOO_HARNESS_VERSION=18.0 docker compose ... up   (project odoo-rpc-ts-18, :8018)
+# can be up at the SAME TIME with no port / volume / container-name clashes.
+#
+# The harness CLI (harness/cli.mjs) sets every variable below; the defaults here
+# just make a bare `docker compose -f harness/compose.yaml` target 16.0 sanely.
+#
+# !!! DISPOSABLE LOCAL HARNESS — NEVER PRODUCTION !!!
+# No master password, list_db=True, weak db creds, throwaway volumes.
+
+name: odoo-rpc-ts-${ODOO_HARNESS_MAJOR:-16}
+
+services:
+  db:
+    image: ${ODOO_HARNESS_POSTGRES_IMAGE:-postgres:15}
+    environment:
+      POSTGRES_USER: ${ODOO_HARNESS_DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${ODOO_HARNESS_DB_PASSWORD:-odoo}
+      POSTGRES_DB: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # db port is intentionally NOT published — no host-level collision between
+    # versions, and nothing outside the compose network needs Postgres directly.
+    healthcheck:
+      test:
+        ["CMD", "pg_isready", "-U", "${ODOO_HARNESS_DB_USER:-odoo}", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  odoo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ODOO_HARNESS_BASE: ${ODOO_HARNESS_BASE_IMAGE:-odoo:16.0}
+        ODOO_HARNESS_REF: ${ODOO_HARNESS_VERSION:-16.0}
+    image: odoo-rpc-ts-harness:${ODOO_HARNESS_VERSION:-16.0}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # odoo.conf is templated from these at entrypoint via envsubst.
+      ODOO_HARNESS_DB_HOST: db
+      ODOO_HARNESS_DB_PORT: "5432"
+      ODOO_HARNESS_DB_USER: ${ODOO_HARNESS_DB_USER:-odoo}
+      ODOO_HARNESS_DB_PASSWORD: ${ODOO_HARNESS_DB_PASSWORD:-odoo}
+    ports:
+      # Host port keyed by major (8016/8017/8018/8019) → two versions coexist.
+      - "${ODOO_HARNESS_PORT:-8016}:8069"
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - ./odoo.conf:/etc/odoo/odoo.conf.template:ro
+      - ./entrypoint.sh:/harness-entrypoint.sh:ro
+      - ./seed.py:/harness-seed.py:ro
+    entrypoint: ["/harness-entrypoint.sh"]
+    command: ["odoo", "-c", "/etc/odoo/odoo.conf"]
+
+volumes:
+  # Volume KEYS are stable ("db-data"); compose namespaces the actual volume by the
+  # project name (odoo-rpc-ts-<major>_db-data), so per-version isolation is automatic.
+  db-data:
+  odoo-data:
