@@ -7,6 +7,14 @@ import { layer as rpcLayer } from "../src/rpc.ts";
 import type { CallKwParams } from "../src/transport.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
 
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
+
 const Partner = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
@@ -35,7 +43,7 @@ const baseHandlers = (searchRows: ReadonlyArray<unknown>): FakeTransport.FakeHan
 
 const runWithLog = <A, E>(
   handlers: FakeTransport.FakeHandlers,
-  build: (client: OdooClient["Type"]) => Effect.Effect<A, E>,
+  build: (client: typeof OdooClient.Service) => Effect.Effect<A, E>,
 ): Effect.Effect<{ value: A; log: ReadonlyArray<CallKwParams> }, E> =>
   Effect.gen(function* () {
     const fake = FakeTransport.make(handlers);
@@ -164,8 +172,9 @@ describe("drift & misuse", () => {
         Effect.exit,
       );
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Fail") {
-        const error = exit.cause.error;
+      const err = firstError(exit);
+      if (err !== undefined) {
+        const error = err;
         assert.isTrue(error instanceof SchemaDriftError);
         if (error instanceof SchemaDriftError) {
           assert.strictEqual(error.context, "res.company.read");
@@ -181,7 +190,7 @@ describe("drift & misuse", () => {
       const BadPartner = Schema.Struct({
         id: Schema.Number,
         name: Schema.String,
-        company_id: Schema.Union(Schema.String, Schema.Literal(false)),
+        company_id: Schema.Union([Schema.String, Schema.Literal(false)]),
       });
       const rows = [{ id: 1, name: "Alice", company_id: "not-a-ref" }];
       const fake = FakeTransport.make({
@@ -202,8 +211,9 @@ describe("drift & misuse", () => {
         Effect.exit,
       );
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Die") {
-        assert.include(String(exit.cause.defect), "is not a ");
+      if (Exit.isFailure(exit)) {
+        const defect = exit.cause.reasons.flatMap((r) => (r._tag === "Die" ? [r.defect] : []))[0];
+        assert.include(String(defect), "is not a ");
       }
     }),
   );

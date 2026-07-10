@@ -1,7 +1,15 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Layer, Option, Ref } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Ref, Array as Arr } from "effect";
 import { GlobalContext, layer as rpcLayer, layerSeeded, layerWith, Rpc } from "../src/rpc.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
+
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
 
 const lastContext = (log: ReadonlyArray<{ readonly kwargs: Record<string, unknown> }>) =>
   log[log.length - 1]?.kwargs["context"];
@@ -122,7 +130,7 @@ describe("Rpc.callKw — context merge", () => {
 
       assert.isTrue(Exit.isFailure(exit));
       if (Exit.isFailure(exit)) {
-        const die = Cause.dieOption(exit.cause);
+        const die = Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Die" ? [r.defect] : [])));
         assert.isTrue(Option.isSome(die));
         if (Option.isSome(die)) {
           assert.include(String(die.value), "kwargs.context");
@@ -197,8 +205,9 @@ describe("Rpc.callKw — context merge", () => {
           Effect.gen(function* () {
             const first = yield* rpc.callKw("m", "ping", []).pipe(Effect.exit);
             assert.isTrue(Exit.isFailure(first));
-            if (Exit.isFailure(first) && first.cause._tag === "Fail") {
-              assert.strictEqual(first.cause.error._tag, "SchemaDriftError");
+            const firstErr = firstError(first);
+            if (firstErr !== undefined) {
+              assert.strictEqual(firstErr._tag, "SchemaDriftError");
             }
             // The seed retries on the next call and now succeeds.
             yield* rpc.callKw("m", "ping", []);

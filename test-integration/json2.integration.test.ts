@@ -29,7 +29,7 @@ const enabled = hasStack && majorVersion >= 19;
 
 /** OdooClient + Rpc + Transport over JSON-2, on a real Node HttpClient. */
 const appLayer = (config = apiKeyConfig()): Layer.Layer<OdooClient | Rpc | Transport> => {
-  const transport = Json2Transport.layer(config).pipe(Layer.provide(NodeHttpClient.layer));
+  const transport = Json2Transport.layer(config).pipe(Layer.provide(NodeHttpClient.layerUndici));
   const rpc = RpcLive.layer.pipe(Layer.provideMerge(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc)) as Layer.Layer<
     OdooClient | Rpc | Transport
@@ -43,7 +43,7 @@ describe.skipIf(!enabled)("json2 (live, Odoo 19+)", () => {
       Effect.gen(function* () {
         const probe = yield* Json2Transport.probeJson2Version(apiKeyConfig());
         assert.isTrue(Option.isSome(probe));
-      }).pipe(Effect.provide(NodeHttpClient.layer)),
+      }).pipe(Effect.provide(NodeHttpClient.layerUndici)),
     TIMEOUT_MS,
   );
 
@@ -118,7 +118,7 @@ describe.skipIf(!enabled)("json2 (live, Odoo 19+)", () => {
         // specification)` — a wrong name is a 422 bad-signature fault here.
         const Partner = defineRecord("res.partner", {
           name: Schema.String,
-          ref: Schema.Union(Schema.String, Schema.Literal(false)),
+          ref: Schema.Union([Schema.String, Schema.Literal(false)]),
         });
         const client = yield* OdooClient;
         const tag = marker();

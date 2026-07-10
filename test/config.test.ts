@@ -2,20 +2,20 @@ import { assert, describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Redacted } from "effect";
 import { OdooConfig } from "../src/config.ts";
 
-const provider = (entries: Record<string, string>) =>
-  ConfigProvider.fromMap(new Map(Object.entries(entries)));
+// v4: providers install per-parse (Config.parse) instead of Effect.withConfigProvider;
+// fromEnv joins path segments with `_`, so keys read ODOO_URL, not ODOO.URL.
+const provider = (entries: Record<string, string>) => ConfigProvider.fromEnv({ env: entries });
 
-const load = (entries: Record<string, string>) =>
-  OdooConfig.pipe(Effect.withConfigProvider(provider(entries)));
+const load = (entries: Record<string, string>) => OdooConfig.parse(provider(entries));
 
 describe("OdooConfig", () => {
   it.effect("parses an https URL + API-key credentials", () =>
     Effect.gen(function* () {
       const cfg = yield* load({
-        "ODOO.URL": "https://erp.example.com",
-        "ODOO.DB": "prod",
-        "ODOO.USERNAME": "svc",
-        "ODOO.API_KEY": "secret-key",
+        "ODOO_URL": "https://erp.example.com",
+        "ODOO_DB": "prod",
+        "ODOO_USERNAME": "svc",
+        "ODOO_API_KEY": "secret-key",
       });
       assert.strictEqual(cfg.url.href, "https://erp.example.com/");
       assert.strictEqual(cfg.db, "prod");
@@ -30,10 +30,10 @@ describe("OdooConfig", () => {
   it.effect("falls back to password credentials when no API key is set", () =>
     Effect.gen(function* () {
       const cfg = yield* load({
-        "ODOO.URL": "https://erp.example.com",
-        "ODOO.DB": "prod",
-        "ODOO.USERNAME": "svc",
-        "ODOO.PASSWORD": "pw",
+        "ODOO_URL": "https://erp.example.com",
+        "ODOO_DB": "prod",
+        "ODOO_USERNAME": "svc",
+        "ODOO_PASSWORD": "pw",
       });
       assert.strictEqual(cfg.credentials._tag, "Password");
       if (cfg.credentials._tag === "Password") {
@@ -45,10 +45,10 @@ describe("OdooConfig", () => {
   it.effect("allows http only for loopback hosts", () =>
     Effect.gen(function* () {
       const cfg = yield* load({
-        "ODOO.URL": "http://localhost:8069",
-        "ODOO.DB": "dev",
-        "ODOO.USERNAME": "admin",
-        "ODOO.API_KEY": "k",
+        "ODOO_URL": "http://localhost:8069",
+        "ODOO_DB": "dev",
+        "ODOO_USERNAME": "admin",
+        "ODOO_API_KEY": "k",
       });
       assert.strictEqual(cfg.url.hostname, "localhost");
     }),
@@ -58,10 +58,10 @@ describe("OdooConfig", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         load({
-          "ODOO.URL": "http://erp.example.com",
-          "ODOO.DB": "prod",
-          "ODOO.USERNAME": "svc",
-          "ODOO.API_KEY": "k",
+          "ODOO_URL": "http://erp.example.com",
+          "ODOO_DB": "prod",
+          "ODOO_USERNAME": "svc",
+          "ODOO_API_KEY": "k",
         }),
       );
       assert.strictEqual(exit._tag, "Failure");
@@ -72,9 +72,9 @@ describe("OdooConfig", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         load({
-          "ODOO.URL": "https://erp.example.com",
-          "ODOO.DB": "prod",
-          "ODOO.USERNAME": "svc",
+          "ODOO_URL": "https://erp.example.com",
+          "ODOO_DB": "prod",
+          "ODOO_USERNAME": "svc",
         }),
       );
       assert.strictEqual(exit._tag, "Failure");
@@ -85,9 +85,9 @@ describe("OdooConfig", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
         load({
-          "ODOO.DB": "prod",
-          "ODOO.USERNAME": "svc",
-          "ODOO.API_KEY": "k",
+          "ODOO_DB": "prod",
+          "ODOO_USERNAME": "svc",
+          "ODOO_API_KEY": "k",
         }),
       );
       assert.strictEqual(exit._tag, "Failure");

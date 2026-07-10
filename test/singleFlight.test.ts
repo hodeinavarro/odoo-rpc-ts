@@ -23,7 +23,7 @@ describe("singleFlight.make", () => {
       const cache = yield* SingleFlight.make(
         Effect.gen(function* () {
           // A yield point so the fibers actually interleave under the permit.
-          yield* Effect.yieldNow();
+          yield* Effect.yieldNow;
           return yield* Ref.updateAndGet(calls, (n) => n + 1);
         }),
       );
@@ -95,8 +95,8 @@ describe("singleFlight.make", () => {
         }),
       );
 
-      const inFlight = yield* Effect.fork(cache.get);
-      yield* Effect.yieldNow(); // let the fiber reach the gate
+      const inFlight = yield* Effect.forkChild(cache.get);
+      yield* Effect.yieldNow; // let the fiber reach the gate
 
       // Invalidate while the acquire is mid-flight...
       yield* cache.invalidate;

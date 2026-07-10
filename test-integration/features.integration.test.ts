@@ -19,7 +19,7 @@ import { apiKeyConfig, hasStack, majorVersion, TIMEOUT_MS } from "./support.ts";
 
 /** OdooClient + a base-tier-seeded Rpc over the JSON-RPC transport. */
 const seededJsonRpc = (config = apiKeyConfig()): Layer.Layer<OdooClient | Rpc> => {
-  const transport = JsonRpcTransport.layer(config).pipe(Layer.provide(NodeHttpClient.layer));
+  const transport = JsonRpcTransport.layer(config).pipe(Layer.provide(NodeHttpClient.layerUndici));
   const rpc = RpcLive.layerSeeded().pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));
 };
@@ -28,7 +28,7 @@ const seededJson2 = (config = apiKeyConfig()): Layer.Layer<OdooClient | Rpc> => 
   // ApiKey creds by construction — the bearer-only guard cannot fail here.
   const transport = Json2Transport.layer(config).pipe(
     Layer.orDie,
-    Layer.provide(NodeHttpClient.layer),
+    Layer.provide(NodeHttpClient.layerUndici),
   );
   const rpc = RpcLive.layerSeeded().pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));

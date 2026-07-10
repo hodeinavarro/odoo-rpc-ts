@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Either, Schema } from "effect";
+import { Result, Schema } from "effect";
 import {
   Many2OneRef,
   Many2OneRefOrNull,
@@ -9,32 +9,32 @@ import {
   OdooDateTimeOrNull,
 } from "../src/records/index.ts";
 
-const decode = <A, I>(schema: Schema.Schema<A, I>) => Schema.decodeUnknownEither(schema);
+const decode = <A, I>(schema: Schema.Codec<A, I>) => Schema.decodeUnknownResult(schema);
 
 describe("Many2OneRef schemas", () => {
   it("decodes a present [id, name] pair to a ref value", () => {
     const result = decode(Many2OneRef)([3, "ACME"]);
-    assert.deepStrictEqual(result, Either.right({ id: 3, name: "ACME" }));
+    assert.deepStrictEqual(result, Result.succeed({ id: 3, name: "ACME" }));
   });
 
   it("Many2OneRefOrNull decodes a pair to a ref value", () => {
     const result = decode(Many2OneRefOrNull)([7, "Globex"]);
-    assert.deepStrictEqual(result, Either.right({ id: 7, name: "Globex" }));
+    assert.deepStrictEqual(result, Result.succeed({ id: 7, name: "Globex" }));
   });
 
   it("Many2OneRefOrNull decodes Odoo's `false` empty to null", () => {
     const result = decode(Many2OneRefOrNull)(false);
-    assert.deepStrictEqual(result, Either.right(null));
+    assert.deepStrictEqual(result, Result.succeed(null));
   });
 
   it("a malformed pair (name not a string) fails to decode (drift)", () => {
     const result = decode(Many2OneRef)([3, 42]);
-    assert.isTrue(Either.isLeft(result));
+    assert.isTrue(Result.isFailure(result));
   });
 
   it("null (not `false`) fails to decode — Odoo empties are `false`", () => {
     const result = decode(Many2OneRefOrNull)(null);
-    assert.isTrue(Either.isLeft(result));
+    assert.isTrue(Result.isFailure(result));
   });
 
   it("round-trips a ref value back to its wire pair", () => {
@@ -78,8 +78,8 @@ describe("OdooDate / OdooDateTime schemas", () => {
   });
 
   it("a malformed date string fails to decode (drift)", () => {
-    assert.isTrue(Either.isLeft(decode(OdooDate)("15/01/2024")));
-    assert.isTrue(Either.isLeft(decode(OdooDateTime)("2024-01-15")));
-    assert.isTrue(Either.isLeft(decode(OdooDate)("2024-13-40")));
+    assert.isTrue(Result.isFailure(decode(OdooDate)("15/01/2024")));
+    assert.isTrue(Result.isFailure(decode(OdooDateTime)("2024-01-15")));
+    assert.isTrue(Result.isFailure(decode(OdooDate)("2024-13-40")));
   });
 });

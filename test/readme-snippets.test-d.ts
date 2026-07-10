@@ -24,13 +24,13 @@ import * as FakeTransport from "../src/testing/index.ts";
 const OdooLive = OdooClientLive.layer.pipe(
   Layer.provideMerge(RpcLive.layer),
   Layer.provide(JsonRpcTransport.layerConfig),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 
 const Partner = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
-  email: Schema.Union(Schema.String, Schema.Literal(false)),
+  email: Schema.Union([Schema.String, Schema.Literal(false)]),
 });
 
 const companies = Effect.gen(function* () {
@@ -98,9 +98,9 @@ const created = Effect.gen(function* () {
   return yield* odoo.create("res.partner", { name: "Ada" });
 }).pipe(
   Effect.catchTags({
-    OdooValidationError: (e) => Effect.dieMessage(`rejected by a constraint: ${e.message}`),
+    OdooValidationError: (e) => Effect.die(`rejected by a constraint: ${e.message}`),
     OdooAccessError: () => Effect.succeed([]),
-    OdooAuthenticationError: (e) => Effect.dieMessage(e.reason),
+    OdooAuthenticationError: (e) => Effect.die(e.reason),
   }),
 );
 void created;
@@ -111,7 +111,7 @@ const WebLive = OdooClientLive.layer.pipe(
   Layer.provideMerge(RpcLive.layer),
   Layer.provide(WebTransport.layerConfig),
   Layer.provideMerge(CookieSessionLive.layerConfig),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 void WebLive;
 
@@ -141,7 +141,7 @@ const HarvestedOdoo = OdooClientLive.layer.pipe(
       // renew: driveLoginWindow,
     }),
   ),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 void HarvestedOdoo;
 
@@ -150,7 +150,7 @@ void HarvestedOdoo;
 const Json2Live = OdooClientLive.layer.pipe(
   Layer.provideMerge(RpcLive.layer),
   Layer.provide(Json2Transport.layerConfig),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 void Json2Live;
 
@@ -158,15 +158,15 @@ void Json2Live;
 
 import { ConfigProvider } from "effect";
 
-const TestConfig = Layer.setConfigProvider(
-  ConfigProvider.fromMap(
-    new Map([
-      ["ODOO_URL", "https://mycompany.odoo.com"],
-      ["ODOO_DB", "mycompany"],
-      ["ODOO_USERNAME", "integration@mycompany.com"],
-      ["ODOO_API_KEY", "…"],
-    ]),
-  ),
+const TestConfig = ConfigProvider.layer(
+  ConfigProvider.fromEnv({
+    env: {
+      ODOO_URL: "https://mycompany.odoo.com",
+      ODOO_DB: "mycompany",
+      ODOO_USERNAME: "integration@mycompany.com",
+      ODOO_API_KEY: "…",
+    },
+  }),
 );
 void TestConfig;
 void Config;
@@ -255,7 +255,7 @@ export const dbAndReports = Effect.gen(function* () {
 
 // --- bring your own http layer ---------------------------------------------------
 
-import { FetchHttpClient, HttpClient } from "@effect/platform";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 
 const TunedHttp = Layer.effect(
   HttpClient.HttpClient,

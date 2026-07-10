@@ -12,7 +12,7 @@ import { ReportService } from "../src/services/report.ts";
 import { hasStack, passwordConfig, TIMEOUT_MS } from "./support.ts";
 
 const sessionLayer: Layer.Layer<CookieSession> = CookieSessionLive.layer(passwordConfig()).pipe(
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 
 describe.skipIf(!hasStack)("report service (live)", () => {

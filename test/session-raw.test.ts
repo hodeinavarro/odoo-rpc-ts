@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Layer, Option, Redacted } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Redacted, Array as Arr } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientResponse } from "../src/internal/platform.ts";
 import { fromExisting, make } from "../src/session/cookie.ts";
@@ -61,7 +61,7 @@ const sessionInfo = (uid: number) => ({
 const failTag = <A, E>(exit: Exit.Exit<A, E>): string | undefined =>
   Exit.isFailure(exit)
     ? Option.getOrUndefined(
-        Option.map(Cause.failureOption(exit.cause), (e) => (e as { _tag: string })._tag),
+        Option.map(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))), (e) => (e as { _tag: string })._tag),
       )
     : undefined;
 

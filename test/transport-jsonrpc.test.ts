@@ -1,8 +1,16 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Redacted, Exit } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientResponse } from "../src/internal/platform.ts";
 import * as JsonRpc from "../src/transports/jsonrpc.ts";
+
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
 
 interface DecodedRequest {
   readonly service: string;
@@ -150,8 +158,9 @@ describe("JsonRpcTransport.make", () => {
         transport.callKw({ model: "res.partner", method: "read", args: [], kwargs: {} }),
       );
       assert.isTrue(exit._tag === "Failure");
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "OdooAuthenticationError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "OdooAuthenticationError");
       }
     }),
   );
@@ -167,8 +176,8 @@ describe("JsonRpcTransport.make", () => {
       const exit = yield* Effect.exit(
         transport.callKw({ model: "res.partner", method: "read", args: [], kwargs: {} }),
       );
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        const err = exit.cause.error;
+      const err = firstError(exit);
+      if (err !== undefined) {
         assert.strictEqual(err._tag, "OdooAuthenticationError");
         if (err._tag === "OdooAuthenticationError") {
           assert.match(err.message, /API key/);
@@ -195,8 +204,8 @@ describe("JsonRpcTransport.make", () => {
       const exit = yield* Effect.exit(
         transport.callKw({ model: "res.partner", method: "write", args: [], kwargs: {} }),
       );
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        const err = exit.cause.error;
+      const err = firstError(exit);
+      if (err !== undefined) {
         assert.strictEqual(err._tag, "OdooUserError");
         if (err._tag === "OdooUserError") {
           assert.strictEqual(err.model, "res.partner");
@@ -219,8 +228,9 @@ describe("JsonRpcTransport.make", () => {
       const exit = yield* Effect.exit(
         transport.callKw({ model: "res.partner", method: "read", args: [], kwargs: {} }),
       );
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "SessionExpiredError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "SessionExpiredError");
       }
     }),
   );
@@ -240,8 +250,9 @@ describe("JsonRpcTransport.make", () => {
       const exit = yield* Effect.exit(
         transport.callKw({ model: "res.partner", method: "read", args: [], kwargs: {} }),
       );
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "OdooAuthenticationError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "OdooAuthenticationError");
       }
     }),
   );
@@ -257,8 +268,9 @@ describe("JsonRpcTransport.make", () => {
       const exit = yield* Effect.exit(
         transport.callKw({ model: "res.partner", method: "read", args: [], kwargs: {} }),
       );
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "SchemaDriftError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "SchemaDriftError");
       }
     }),
   );

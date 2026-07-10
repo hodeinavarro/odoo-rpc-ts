@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Option, Ref } from "effect";
+import { Cause, Effect, Exit, Option, Ref, Array as Arr } from "effect";
 import { OdooTransportError } from "../src/errors/transport.ts";
 import { Transport } from "../src/transport.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
@@ -74,7 +74,7 @@ describe("FakeTransport", () => {
       assert.isTrue(Exit.isFailure(exit));
       if (Exit.isFailure(exit)) {
         // A defect (die), never a value in the typed failure channel.
-        const die = Cause.dieOption(exit.cause);
+        const die = Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Die" ? [r.defect] : [])));
         assert.isTrue(Option.isSome(die));
         assert.strictEqual(
           Option.getOrThrow(die),

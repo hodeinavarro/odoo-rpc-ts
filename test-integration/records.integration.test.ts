@@ -22,7 +22,7 @@ import { Many2OneRefOrNull, OdooDateTime } from "../src/records/index.ts";
 import { apiKeyConfig, hasStack, marker, TIMEOUT_MS } from "./support.ts";
 
 const seededJsonRpc = (): Layer.Layer<OdooClient | Rpc> => {
-  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(Layer.provide(NodeHttpClient.layer));
+  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(Layer.provide(NodeHttpClient.layerUndici));
   const rpc = RpcLive.layerSeeded().pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));
 };
