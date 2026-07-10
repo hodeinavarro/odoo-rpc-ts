@@ -60,14 +60,21 @@ export const make = (
     dialect: options?.dialect ?? "execute-kw",
     callKw: (params: CallKwParams) =>
       Effect.gen(function* () {
-        yield* Ref.update(callLog, (log) => [...log, params]);
-
         const handler = handlers[params.model]?.[params.method];
         if (handler === undefined) {
+          // Every real Odoo server answers the seeded default layer's
+          // res.users.context_get, so the fake does too — WITHOUT logging it
+          // (it is ambient plumbing, and logging it would shift positional
+          // log assertions). Script res.users.context_get to observe/override.
+          if (params.model === "res.users" && params.method === "context_get") {
+            return {};
+          }
+          yield* Ref.update(callLog, (log) => [...log, params]);
           return yield* Effect.die(
             `FakeTransport: no handler for ${params.model}.${params.method}`,
           );
         }
+        yield* Ref.update(callLog, (log) => [...log, params]);
 
         const result = handler(params);
         return isEffect(result) ? yield* result : result;

@@ -209,5 +209,11 @@ export const layerSeeded = (config?: {
     }),
   );
 
-/** The {@link Rpc} layer with no layer-level context overrides. */
-export const layer: Layer.Layer<Rpc, never, Transport> = layerWith();
+/**
+ * The default {@link Rpc} layer: base tier seeded from the server-side user
+ * context ({@link layerSeeded}), so translated fields (stage names, selection
+ * labels, …) come back in the user's language instead of the source terms —
+ * matching odoo-rpc-py's `seed_context=True` default. Opt out with
+ * {@link layerWith} (no provider) when calls must carry no ambient context.
+ */
+export const layer: Layer.Layer<Rpc, never, Transport> = layerSeeded();

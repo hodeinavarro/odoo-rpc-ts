@@ -31,10 +31,28 @@ describe("Rpc.callKw — context merge", () => {
     }),
   );
 
-  it.effect("defaults session/base context to {} when GlobalContext is absent", () =>
+  it.effect("default layer is seeded: base tier comes from res.users.context_get", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        m: { ping: () => true },
+        "res.users": { context_get: () => ({ lang: "es_ES", tz: "Europe/Madrid" }) },
+      });
+      const layer = rpcLayer.pipe(Layer.provide(fake.layer));
+
+      yield* Rpc.pipe(
+        Effect.flatMap((rpc) => rpc.callKw("m", "ping", [])),
+        Effect.provide(layer),
+      );
+
+      const log = yield* Ref.get(fake.callLog);
+      assert.deepStrictEqual(lastContext(log), { lang: "es_ES", tz: "Europe/Madrid" });
+    }),
+  );
+
+  it.effect("layerWith (no provider) defaults the base context to {}", () =>
     Effect.gen(function* () {
       const fake = FakeTransport.make({ m: { ping: () => true } });
-      const layer = rpcLayer.pipe(Layer.provide(fake.layer));
+      const layer = layerWith().pipe(Layer.provide(fake.layer));
 
       yield* Rpc.pipe(
         Effect.flatMap((rpc) => rpc.callKw("m", "ping", [])),
@@ -92,7 +110,7 @@ describe("Rpc.callKw — context merge", () => {
   it.effect("dies when kwargs.context is present but not a plain object", () =>
     Effect.gen(function* () {
       const fake = FakeTransport.make({ m: { ping: () => true } });
-      const layer = rpcLayer.pipe(Layer.provide(fake.layer));
+      const layer = layerWith().pipe(Layer.provide(fake.layer));
 
       const exit = yield* Rpc.pipe(
         Effect.flatMap((rpc) =>

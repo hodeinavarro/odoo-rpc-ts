@@ -50,8 +50,10 @@ await companies.pipe(Effect.provide(OdooLive), Effect.runPromise);
 `unlink`, `fieldsGet`, `searchCount`, `readGroup`, `nameSearch`, `ref`
 (resolve an XML id to `[model, id]`), and a generic `call` escape hatch —
 every op works over every transport. `Rpc.callKw` sits underneath for
-anything else, and `RpcLive.layerSeeded()` seeds the user's server-side
-context (`lang`, `tz`) as the base tier of every call.
+anything else. `RpcLive.layer` seeds the user's server-side context
+(`lang`, `tz` — via `res.users.context_get`, lazily on the first call) as
+the base tier of every call, so translated fields come back in the user's
+language; use `RpcLive.layerWith()` to opt out of seeding.
 
 ## Everyday workflows
 
