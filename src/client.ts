@@ -1,10 +1,19 @@
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Option, Schema } from "effect";
 import type { Domain } from "./domain.ts";
 import { normalizeDomain } from "./domain.ts";
+import { ProtocolUnsupportedError } from "./errors/protocol.ts";
 import { SchemaDriftError } from "./errors/schema.ts";
 import { OdooMissingError, type OdooServerError } from "./errors/server.ts";
+import {
+  compileSpecification,
+  type HasId,
+  makeTypedRecordSet,
+  type RecordSpec,
+  type TypedRecordSet,
+} from "./records/index.ts";
 import { type OdooContext, Rpc } from "./rpc.ts";
 import type { TransportCallError } from "./transport.ts";
+import { VersionResolver } from "./version.ts";
 
 /** A decoded Odoo record with unmodeled field values. */
 export type OdooRecord = { readonly [field: string]: unknown };
@@ -68,6 +77,34 @@ export interface SearchReadOptions extends SearchOptions {
   readonly fields?: ReadonlyArray<string>;
 }
 
+/**
+ * Options for the declared-prefetch typed reads ({@link OdooClient.searchTyped}).
+ * `serverMajor` is the explicit version-gate override used when NO
+ * {@link VersionResolver} is in scope: it decides whether the `specification`
+ * path is taken (>= 17) or, for a relation-free spec, degrades to `search_read`
+ * (< 17). When a `VersionResolver` IS provided it always wins and `serverMajor`
+ * is ignored.
+ */
+export interface TypedOptions extends SearchOptions {
+  readonly serverMajor?: number;
+}
+
+/** Options for {@link OdooClient.readTyped}/`saveTyped` — context + the same
+ * explicit `serverMajor` gate override as {@link TypedOptions}. */
+export interface TypedReadOptions {
+  readonly context?: OdooContext;
+  readonly serverMajor?: number;
+}
+
+/** `web_search_read` returns `{ length, records }`, not a bare list. */
+const WebSearchReadResult = <A, I>(
+  row: Schema.Schema<A, I>,
+): Schema.Schema<{ readonly length: number; readonly records: ReadonlyArray<A> }, unknown> =>
+  Schema.Struct({ length: Schema.Number, records: Schema.Array(row) }) as unknown as Schema.Schema<
+    { readonly length: number; readonly records: ReadonlyArray<A> },
+    unknown
+  >;
+
 /** Drop `undefined`-valued keys so we never wire an explicit `limit: null`. */
 const compact = (obj: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -102,6 +139,61 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
       model: string,
       options?: SearchReadOptions,
       schema?: Schema.Schema<A, I>,
+    ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
+
+    /**
+     * `search_read`, decoding rows through `schema`, into a {@link TypedRecordSet}
+     * — an immutable snapshot bound to `(rpc, model)` with explicit, batched
+     * relation traversal (`fetchRelated`/`joinRelated`). The schema MUST decode
+     * an `id: number` on every row (`A extends { id: number }`); that id keys all
+     * downstream joins. This is the candidate-B ("explicit traversal") entry
+     * point — one `search_read` here, then one `read` per relation you traverse.
+     */
+    readonly searchRecordsTyped: <A extends HasId, I = A>(
+      model: string,
+      options: SearchReadOptions | undefined,
+      schema: Schema.Schema<A, I>,
+    ) => Effect.Effect<TypedRecordSet<A>, TransportCallError>;
+
+    /**
+     * Declared-prefetch typed search (candidate A). Compiles `record`'s field
+     * graph into ONE `web_search_read` `specification` call and strict-decodes
+     * the nested payload — a declared many2one comes back as a `{ id, ... }` dict
+     * (or `null`), an x2many as a nested list — with NO per-relation round trip.
+     *
+     * VERSION GATE (before any round trip). If a {@link VersionResolver} is in
+     * scope it decides; else `options.serverMajor` does; else the spec path is
+     * assumed (17+). A declared relation on a < 17 server fails with
+     * {@link ProtocolUnsupportedError}; a relation-free declared model degrades to
+     * a plain `search_read` (one trip, identical decode).
+     */
+    readonly searchTyped: <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      options?: TypedOptions,
+    ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
+
+    /**
+     * Declared-prefetch typed read by ids via `web_read` (17+). Same nested
+     * decode and version gate as {@link searchTyped}; degrades to plain `read`
+     * for a relation-free spec on < 17.
+     */
+    readonly readTyped: <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      ids: ReadonlyArray<number>,
+      options?: TypedReadOptions,
+    ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
+
+    /**
+     * Write `values` to `ids` and return the FRESH nested snapshot via
+     * `web_save` (17+ ONLY — no degrade, even for a relation-free spec). One
+     * explicit call: it writes, then re-reads through `record`'s compiled
+     * `specification`. On < 17 fails with {@link ProtocolUnsupportedError}.
+     */
+    readonly saveTyped: <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      ids: ReadonlyArray<number>,
+      values: OdooRecord,
+      options?: TypedReadOptions,
     ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
 
     /** `search(domain, offset, limit, order)` — matching record ids. */
@@ -245,6 +337,182 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
         .callKw(model, "search_read", [], kwargs, withContext(options?.context))
         .pipe(Effect.flatMap(decode(Schema.Array(rowSchema), `${model}.search_read`)));
     };
+
+    const searchRecordsTyped = <A extends HasId, I = A>(
+      model: string,
+      options: SearchReadOptions | undefined,
+      schema: Schema.Schema<A, I>,
+    ): Effect.Effect<TypedRecordSet<A>, TransportCallError> =>
+      // Reuse the search_read decode plumbing, then wrap the decoded rows in a
+      // snapshot bound to this Rpc seam so fetchRelated can batch a co-model read.
+      searchRead(model, options, schema).pipe(
+        Effect.map((rows) => makeTypedRecordSet(rpc, model, rows)),
+      );
+
+    // --- declared-prefetch typed reads (candidate A) ------------------------
+
+    type GateDecision =
+      | { readonly _tag: "spec" }
+      | { readonly _tag: "degrade" }
+      | { readonly _tag: "unsupported"; readonly serverVersion: string };
+
+    /**
+     * Resolve whether the `specification` path is available. A {@link VersionResolver}
+     * in scope wins (its capability is authoritative); absent, an explicit
+     * `serverMajor` gates; absent both, we DEFAULT to the spec path (17+
+     * assumed) — documented on {@link TypedOptions.serverMajor}, and a 16 server
+     * then surfaces the server's own fault through the choke point.
+     */
+    const resolveSupportsSpec = (
+      serverMajor: number | undefined,
+    ): Effect.Effect<{ readonly supports: boolean; readonly label: string }, TransportCallError> =>
+      Effect.serviceOption(VersionResolver).pipe(
+        Effect.flatMap((opt) =>
+          Option.match(opt, {
+            onSome: (vr) =>
+              vr.resolve.pipe(
+                Effect.map((r) => ({
+                  supports: r.capabilities.supportsWebReadSpec,
+                  label: r.version.raw.join("."),
+                })),
+              ),
+            onNone: () =>
+              serverMajor === undefined
+                ? Effect.succeed({ supports: true, label: "unknown (assumed 17+)" })
+                : Effect.succeed({ supports: serverMajor >= 17, label: `${serverMajor}.x` }),
+          }),
+        ),
+      );
+
+    /** `requireSpec` (saveTyped) forbids the degrade branch even for a
+     * relation-free spec — `web_save` is 17+ only. */
+    const gateSpec = (
+      hasRelations: boolean,
+      requireSpec: boolean,
+      serverMajor: number | undefined,
+    ): Effect.Effect<GateDecision, TransportCallError> =>
+      resolveSupportsSpec(serverMajor).pipe(
+        Effect.map(({ supports, label }): GateDecision => {
+          if (supports) {
+            return { _tag: "spec" };
+          }
+          if (requireSpec || hasRelations) {
+            return { _tag: "unsupported", serverVersion: label };
+          }
+          return { _tag: "degrade" };
+        }),
+      );
+
+    const specUnsupported = (
+      model: string,
+      method: string,
+      serverVersion: string,
+    ): ProtocolUnsupportedError =>
+      new ProtocolUnsupportedError({
+        protocol: "web",
+        serverVersion,
+        message:
+          `${model}.${method}: the web_read 'specification' protocol (declared-prefetch typed ` +
+          `records) requires Odoo 17+, but the server is ${serverVersion}. For a relation-free ` +
+          `read on 16 use searchTyped/readTyped (they degrade to search_read/read); for ` +
+          `relation traversal on 16 use searchRecordsTyped + fetchRelated (candidate B).`,
+      });
+
+    const declaredFields = <A extends HasId, I>(record: RecordSpec<A, I>): ReadonlyArray<string> =>
+      Object.keys(record.fields);
+
+    const searchTyped = <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      options?: TypedOptions,
+    ): Effect.Effect<ReadonlyArray<A>, TransportCallError> =>
+      gateSpec(record.hasRelations, false, options?.serverMajor).pipe(
+        Effect.flatMap((gate) => {
+          if (gate._tag === "unsupported") {
+            return Effect.fail(specUnsupported(record.model, "web_search_read", gate.serverVersion));
+          }
+          if (gate._tag === "degrade") {
+            // Relation-free on < 17: plain search_read over the declared fields;
+            // the row schema decodes both wire shapes identically.
+            return searchRead(record.model, { ...options, fields: declaredFields(record) }, record.schema);
+          }
+          return Effect.sync(() => compileSpecification(record)).pipe(
+            Effect.flatMap((specification) => {
+              const kwargs = compact({
+                specification,
+                domain: normalizeDomain(options?.domain ?? []),
+                limit: options?.limit,
+                offset: options?.offset,
+                order: options?.order,
+              });
+              return rpc.callKw(
+                record.model,
+                "web_search_read",
+                [],
+                kwargs,
+                withContext(options?.context),
+              );
+            }),
+            Effect.flatMap(decode(WebSearchReadResult(record.schema), `${record.model}.web_search_read`)),
+            Effect.map((result) => result.records),
+          );
+        }),
+      );
+
+    const readTyped = <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      ids: ReadonlyArray<number>,
+      options?: TypedReadOptions,
+    ): Effect.Effect<ReadonlyArray<A>, TransportCallError> =>
+      gateSpec(record.hasRelations, false, options?.serverMajor).pipe(
+        Effect.flatMap((gate) => {
+          if (gate._tag === "unsupported") {
+            return Effect.fail(specUnsupported(record.model, "web_read", gate.serverVersion));
+          }
+          const seam = {
+            ids,
+            ...(options?.context !== undefined ? { context: options.context } : {}),
+          };
+          if (gate._tag === "degrade") {
+            return rpc
+              .callKw(record.model, "read", [], { fields: declaredFields(record) }, seam)
+              .pipe(Effect.flatMap(decode(Schema.Array(record.schema), `${record.model}.read`)));
+          }
+          return Effect.sync(() => compileSpecification(record)).pipe(
+            Effect.flatMap((specification) =>
+              rpc.callKw(record.model, "web_read", [], { specification }, seam),
+            ),
+            Effect.flatMap(decode(Schema.Array(record.schema), `${record.model}.web_read`)),
+          );
+        }),
+      );
+
+    const saveTyped = <A extends HasId, I = A>(
+      record: RecordSpec<A, I>,
+      ids: ReadonlyArray<number>,
+      values: OdooRecord,
+      options?: TypedReadOptions,
+    ): Effect.Effect<ReadonlyArray<A>, TransportCallError> =>
+      gateSpec(record.hasRelations, true, options?.serverMajor).pipe(
+        Effect.flatMap((gate) => {
+          if (gate._tag === "unsupported") {
+            return Effect.fail(specUnsupported(record.model, "web_save", gate.serverVersion));
+          }
+          const seam = {
+            ids,
+            ...(options?.context !== undefined ? { context: options.context } : {}),
+          };
+          return Effect.sync(() => compileSpecification(record)).pipe(
+            Effect.flatMap((specification) =>
+              // vals is positional over execute_kw (call_kw reads args[0]) and
+              // keyword-only (`vals`) over JSON-2 — mirror create's dialect split.
+              rpc.dialect === "json2"
+                ? rpc.callKw(record.model, "web_save", [], { vals: values, specification }, seam)
+                : rpc.callKw(record.model, "web_save", [values], { specification }, seam),
+            ),
+            Effect.flatMap(decode(Schema.Array(record.schema), `${record.model}.web_save`)),
+          );
+        }),
+      );
 
     const search = (
       model: string,
@@ -423,6 +691,10 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
 
     return {
       searchRead,
+      searchRecordsTyped,
+      searchTyped,
+      readTyped,
+      saveTyped,
       search,
       read,
       create,

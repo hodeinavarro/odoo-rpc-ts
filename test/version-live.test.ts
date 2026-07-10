@@ -40,6 +40,7 @@ describe("version-live.make", () => {
       assert.deepStrictEqual(resolved.capabilities, {
         supportsJson2: true,
         jsonRpcDeprecated: true,
+        supportsWebReadSpec: true,
       });
     }),
   );
@@ -55,6 +56,7 @@ describe("version-live.make", () => {
       assert.deepStrictEqual(resolved.capabilities, {
         supportsJson2: false,
         jsonRpcDeprecated: false,
+        supportsWebReadSpec: false,
       });
     }),
   );

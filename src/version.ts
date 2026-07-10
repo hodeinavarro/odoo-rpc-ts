@@ -40,6 +40,14 @@ export interface OdooCapabilities {
   readonly supportsJson2: boolean;
   /** `/jsonrpc` and `/xmlrpc` are deprecated upstream (Odoo 19+). */
   readonly jsonRpcDeprecated: boolean;
+  /**
+   * `web_read`/`web_search_read`/`web_save` accept a nested `specification`
+   * kwarg (Odoo 17+). This gates the declared-prefetch typed record path
+   * (`searchTyped`/`readTyped`/`saveTyped`); on 16 the kwarg is rejected, so a
+   * relation-free declared model degrades to `search_read`/`read` and a declared
+   * relation fails with `ProtocolUnsupportedError` before any round trip.
+   */
+  readonly supportsWebReadSpec: boolean;
 }
 
 /** A resolved version together with its derived capabilities. */
@@ -69,6 +77,7 @@ export const parseVersionInfo = (raw: ServerVersionInfo): OdooVersion => ({
 export const deriveCapabilities = (version: OdooVersion): OdooCapabilities => ({
   supportsJson2: version.major >= 19,
   jsonRpcDeprecated: version.major >= 19,
+  supportsWebReadSpec: version.major >= 17,
 });
 
 /**
