@@ -106,10 +106,14 @@ const allPartnerIds = Effect.gen(function* () {
 
 ## Typed records and relations
 
-Two explicit ways to traverse relations — both make N+1 storms structurally
-impossible, and every RPC stays visible:
+Two per-protocol tiers — dialects of the same design, not competitors. Both
+make N+1 storms structurally impossible, and every RPC stays visible. The
+**spec tier** speaks the `specification` protocol Odoo grew in 17; the
+**classic tier** speaks the classic `[id, name]`-pair protocol every supported
+version (16+) understands. Pick by the oldest server you must reach.
 
-**Declared prefetch** (Odoo 17+) — declare the graph, get ONE `web_search_read`:
+**Spec tier — declared prefetch** (Odoo 17+ `specification` protocol) —
+declare the graph, get ONE `web_search_read`:
 
 ```ts
 import { defineRecord, Many2One, OdooClient, OdooDateTime } from "odoo-rpc-ts"
@@ -128,13 +132,16 @@ const rows = Effect.gen(function* () {
 })
 ```
 
-Provide a `VersionResolver` layer and the 17+ gate holds automatically: a
+The version gate is explicit: the spec tier's relations REQUIRE Odoo 17+.
+Provide a `VersionResolver` layer and the gate holds automatically — a
 declared relation on Odoo 16 fails with `ProtocolUnsupportedError` before any
 round trip, while relation-free records degrade to plain `search_read`.
 `saveTyped` (17+) writes and returns the fresh nested snapshot in one call.
+For anything that must also run on 16, use the classic tier below.
 
-**Explicit traversal** (all versions) — rows keep `[id, name]` refs; batch the
-hop when you need it, exactly one deduped `read`:
+**Classic tier — explicit traversal** (all versions, 16+) — rows keep the
+classic `[id, name]` refs; batch the hop when you need it, exactly one deduped
+`read`:
 
 ```ts
 import { Many2OneRefOrNull, OdooClient } from "odoo-rpc-ts"
@@ -182,6 +189,10 @@ const pdf = yield* ReportService.download(session, {
 Connection profiles never serialize secrets: `ProfileData` holds the metadata,
 secrets cross only as `Redacted` through a `SecretStore` you implement (OS
 keyring in Node, IndexedDB in the browser); in-memory layers ship for tests.
+Besides api-key/password presets, `saveSessionProfile(name, url, sessionId)`
+stores a harvested `session_id` cookie (the TOTP/SSO flow — no credentials
+exist); `loadProfile` returns a tagged union, and its `"session"` arm feeds
+`CookieSessionLive.fromExisting` directly instead of fabricating a config.
 
 ## Bring your own HTTP layer
 

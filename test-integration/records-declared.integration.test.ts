@@ -1,5 +1,5 @@
 /**
- * LIVE integration specs for declared-prefetch typed records (candidate A). Per
+ * LIVE integration specs for declared-prefetch typed records (spec tier, 17+). Per
  * version:
  *
  *   17/18/19 — a declared `Partner { name, company_id: Many2One(Company),

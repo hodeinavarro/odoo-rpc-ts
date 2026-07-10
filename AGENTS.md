@@ -213,7 +213,8 @@ shape, code 100, `common.version` →
 API-key-as-password (and TOTP-enabled users are API-key-only over RPC —
 surface a dedicated error hint on AccessDenied when a password was used).
 
-`VersionResolver` turns `server_version_info` into a capability record;
+`VersionResolver` turns `server_version_info` into a `WireCapabilities` record
+(wire capabilities only — product capabilities belong to the consumer);
 transports fail fast with a tagged error (`ProtocolUnsupportedError`) when
 asked to run against a server that can't serve them. 17+ private-method
 `AccessError`s exist for methods callable in 16 — that's server policy, we

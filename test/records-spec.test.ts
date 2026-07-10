@@ -1,5 +1,5 @@
 /**
- * Pure unit suite for the declared-record specification compiler (candidate A).
+ * Pure unit suite for the spec-tier declared-record specification compiler.
  * No I/O: `compileSpecification` turns a declared field graph into the exact
  * nested `web_read`/`web_search_read` `specification` payload — this is the
  * highest-value test in the layer, since the compiled shape IS the contract with

@@ -29,15 +29,16 @@ export {
   type DomainOperator,
 } from "./domain.ts";
 
-// Version resolution and capability derivation.
+// Version resolution and WIRE-capability derivation (the app layer owns
+// product capabilities — see WireCapabilities).
 export {
   VersionResolver,
   CommonVersionResponse,
   ServerVersionInfo,
   parseVersionInfo,
-  deriveCapabilities,
+  deriveWireCapabilities,
   type OdooVersion,
-  type OdooCapabilities,
+  type WireCapabilities,
   type ResolvedVersion,
 } from "./version.ts";
 export * as VersionResolverLive from "./version-live.ts";
@@ -59,11 +60,14 @@ export {
 } from "./client.ts";
 export * as OdooClientLive from "./client.ts";
 
-// Typed records — candidate B (explicit traversal: Many2OneRef, TypedRecordSet)
-// and candidate A (declared prefetch: defineRecord/Many2One/One2Many + the
-// pure specification compiler). Relation/temporal decode vocabulary is shared.
+// Typed records — two per-protocol tiers, not competitors. The CLASSIC tier
+// (explicit traversal: Many2OneRef*, TypedRecordSet) speaks the classic
+// `[id, name]`-pair protocol and works on 16+; the SPEC tier (declared
+// prefetch: defineRecord/Many2One/One2Many + the pure specification compiler)
+// speaks the 17+ `specification` protocol. Relation/temporal decode
+// vocabulary is shared.
 export {
-  // Relation & temporal decode schemas (candidate B row declarations).
+  // Relation & temporal decode schemas (classic-tier row declarations).
   Many2OneRef,
   Many2OneRefFromWire,
   Many2OneRefOrNull,
@@ -72,7 +76,7 @@ export {
   OdooDateOrNull,
   OdooDateTime,
   OdooDateTimeOrNull,
-  // Pure join helpers + the explicit-traversal snapshot.
+  // Pure join helpers + the classic-tier explicit-traversal snapshot.
   collectRefIds,
   makeRelatedMap,
   makeTypedRecordSet,
@@ -82,7 +86,7 @@ export {
   type RefOrId,
   type RelatedMap,
   type TypedRecordSet,
-  // Declared-prefetch model declaration + compilation (candidate A).
+  // Spec-tier model declaration + compilation (17+ `specification` protocol).
   defineRecord,
   Many2One,
   One2Many,
@@ -140,6 +144,9 @@ export {
   ProfileStoreError,
   ProfileSecretMissingError,
   type ProfileData,
+  type CredentialProfileData,
+  type SessionProfileData,
+  type LoadedProfile,
   type ProfileProtocol,
 } from "./profiles.ts";
 export * as ProfilesLive from "./profiles.ts";

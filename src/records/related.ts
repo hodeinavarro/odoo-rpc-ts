@@ -1,5 +1,5 @@
 /**
- * Pure join helpers for explicit relation traversal (candidate B). No I/O: given
+ * Pure join helpers for explicit relation traversal (the classic tier). No I/O: given
  * already-decoded rows and a field accessor, collect the distinct related ids to
  * fetch, and key decoded related rows by id for O(1) joins. The batched `read`
  * itself lives in {@link ./typed.ts}; everything here is inert data shaping.
