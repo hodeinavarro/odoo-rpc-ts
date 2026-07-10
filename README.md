@@ -152,6 +152,41 @@ const resilientCount = Effect.gen(function* () {
 });
 ```
 
+Already hold a `session_id` minted elsewhere — e.g. harvested from an
+embedded browser window after the user completed the real `/web/login` page
+(the only stock flow for TOTP/SSO accounts)? Adopt it directly; the client
+never holds credentials:
+
+```ts
+import { Redacted } from "effect";
+import { CookieSessionLive, WebTransport } from "odoo-rpc-ts";
+
+const url = new URL("https://erp.example.com");
+
+const HarvestedOdoo = OdooClientLive.layer.pipe(
+  Layer.provideMerge(RpcLive.layer),
+  Layer.provide(WebTransport.layer({ url })), // no credentials needed
+  Layer.provide(
+    CookieSessionLive.layerFromExisting({
+      url,
+      sessionId: Redacted.make(harvestedCookieValue),
+      // Optional renew hook: mint a fresh cookie after an invalidate (e.g.
+      // reopen the login window). Without it the session cannot recover —
+      // once the server kills it, calls (and the one relogin attempted by
+      // retryOnSessionExpired) fail with SessionExpiredError, and your shell
+      // constructs a new session from a fresh cookie.
+      // renew: driveLoginWindow,
+    }),
+  ),
+  Layer.provide(NodeHttpClient.layer),
+);
+```
+
+The injected session hydrates honestly on first use via
+`POST /web/session/get_session_info`, so `login` still yields the real
+`uid`/context/version — and a dead cookie surfaces immediately as
+`SessionExpiredError`.
+
 Notes: API keys work as the password on every route (and are _required_ for
 accounts with 2FA). JSON-2 is bearer-only and keyword-only — the client
 handles the encoding differences for you via the transport's `dialect`.

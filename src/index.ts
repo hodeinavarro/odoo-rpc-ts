@@ -64,6 +64,7 @@ export {
   CookieSession,
   type CookieSessionService,
   type CookieLoginError,
+  type ExistingSessionOptions,
   type OdooSessionInfo,
 } from "./session/cookie.ts";
 export * as CookieSessionLive from "./session/cookie.ts";

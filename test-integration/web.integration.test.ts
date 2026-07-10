@@ -3,7 +3,7 @@
  * All through the public surface; skips itself when no harness stack is up.
  */
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Ref } from "effect";
+import { Effect, Layer, Option, Redacted, Ref } from "effect";
 import { Cookies } from "@effect/platform";
 import { NodeHttpClient } from "@effect/platform-node";
 import {
@@ -24,6 +24,20 @@ const sessionLayer = (config = passwordConfig()): Layer.Layer<CookieSession> =>
 /** OdooClient + CookieSession over the web transport, on a real Node HttpClient. */
 const appLayer = (config = passwordConfig()): Layer.Layer<OdooClient | CookieSession> => {
   const transport = WebTransport.layer(config).pipe(Layer.provideMerge(sessionLayer(config)));
+  const rpc = RpcLive.layer.pipe(Layer.provideMerge(transport));
+  return OdooClientLive.layer.pipe(Layer.provideMerge(rpc)) as Layer.Layer<
+    OdooClient | CookieSession
+  >;
+};
+
+/** OdooClient over an INJECTED (harvested) cookie session — no credentials. */
+const existingAppLayer = (sessionId: string): Layer.Layer<OdooClient | CookieSession> => {
+  const url = passwordConfig().url;
+  const session = CookieSessionLive.layerFromExisting({
+    url,
+    sessionId: Redacted.make(sessionId),
+  }).pipe(Layer.provide(NodeHttpClient.layer));
+  const transport = WebTransport.layer({ url }).pipe(Layer.provideMerge(session));
   const rpc = RpcLive.layer.pipe(Layer.provideMerge(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc)) as Layer.Layer<
     OdooClient | CookieSession
@@ -83,6 +97,48 @@ describe.skipIf(!hasStack)("web (live)", () => {
         const error = yield* session.login.pipe(Effect.flip);
         assert.strictEqual(error._tag, "OdooAuthenticationError");
       }).pipe(Effect.provide(sessionLayer(badPasswordConfig()))),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!hasStack)(
+    "fromExisting adopts a harvested session_id: real session_info + call_kw, no credentials",
+    () =>
+      Effect.gen(function* () {
+        // Mint a session with credentials, then HARVEST the cookie — exactly
+        // what an embedded login window's cookie jar hands a desktop shell.
+        const minted = yield* CookieSession;
+        const mintedInfo = yield* minted.login;
+        const jar = yield* Ref.get(minted.cookies);
+        const harvested = Option.getOrThrow(Cookies.getValue(jar, "session_id"));
+
+        yield* Effect.gen(function* () {
+          const injected = yield* CookieSession;
+          const info = yield* injected.login;
+          // Honest hydration via get_session_info: same real uid.
+          assert.strictEqual(info.uid, mintedInfo.uid);
+          assert.property(info.raw, "uid");
+          const client = yield* OdooClient;
+          const count = yield* client.searchCount("res.partner", []);
+          assert.isAtLeast(count, 0);
+
+          // The cannot-recover contract, live: invalidate (no renew hook) →
+          // login fails fast with SessionExpiredError.
+          yield* injected.invalidate;
+          const error = yield* injected.login.pipe(Effect.flip);
+          assert.strictEqual(error._tag, "SessionExpiredError");
+        }).pipe(Effect.provide(existingAppLayer(harvested)));
+      }).pipe(Effect.provide(sessionLayer())),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!hasStack)(
+    "fromExisting with a dead cookie → SessionExpiredError on login",
+    () =>
+      Effect.gen(function* () {
+        const injected = yield* CookieSession;
+        const error = yield* injected.login.pipe(Effect.flip);
+        assert.strictEqual(error._tag, "SessionExpiredError");
+      }).pipe(Effect.provide(existingAppLayer("deadbeef-invalid-session"))),
     TIMEOUT_MS,
   );
 

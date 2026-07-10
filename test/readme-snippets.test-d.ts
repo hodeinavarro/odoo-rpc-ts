@@ -123,6 +123,28 @@ export const resilientCount = Effect.gen(function* () {
   return yield* retryOnSessionExpired(odoo.searchCount("res.partner", []), session);
 });
 
+// --- harvested cookie (fromExisting) ----------------------------------------
+
+import { Redacted } from "effect";
+
+declare const harvestedCookieValue: string;
+
+const url = new URL("https://erp.example.com");
+
+const HarvestedOdoo = OdooClientLive.layer.pipe(
+  Layer.provideMerge(RpcLive.layer),
+  Layer.provide(WebTransport.layer({ url })), // no credentials needed
+  Layer.provide(
+    CookieSessionLive.layerFromExisting({
+      url,
+      sessionId: Redacted.make(harvestedCookieValue),
+      // renew: driveLoginWindow,
+    }),
+  ),
+  Layer.provide(NodeHttpClient.layer),
+);
+void HarvestedOdoo;
+
 // --- json2 ------------------------------------------------------------------
 
 const Json2Live = OdooClientLive.layer.pipe(
