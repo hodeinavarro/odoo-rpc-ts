@@ -1,14 +1,4 @@
-import {
-  type ConfigError,
-  Context,
-  Effect,
-  Either,
-  Layer,
-  Option,
-  Redacted,
-  Ref,
-  Schema,
-} from "effect";
+import { type ConfigError, Context, Effect, Layer, Option, Redacted, Ref, Schema } from "effect";
 import { OdooConfig } from "../config.ts";
 import { OdooAuthenticationError } from "../errors/auth.ts";
 import type { OdooServerFault } from "../errors/server.ts";
@@ -264,6 +254,10 @@ export interface ExistingSessionOptions {
  * to catch it, re-run its login UI, and construct a fresh session (or supply
  * `renew` to do the same in place).
  */
+// RFC 6265 `cookie-octet`: the exact charset a cookie value may put on the
+// wire (excludes controls, whitespace, DQUOTE, comma, semicolon, backslash).
+const cookieOctets = /^[\u0021\u0023-\u002b\u002d-\u003a\u003c-\u005b\u005d-\u007e]+$/;
+
 export const fromExisting = (
   options: ExistingSessionOptions,
 ): Effect.Effect<CookieSessionService, never, HttpClient.HttpClient> =>
@@ -280,18 +274,24 @@ export const fromExisting = (
     const nextCookie = yield* Ref.make(Option.some(options.sessionId));
 
     // Redacted.value only at the wire boundary (the cookie jar IS the wire
-    // buffer). `makeCookie` validates the value — nothing throws.
-    const seed = (value: Redacted.Redacted<string>): Effect.Effect<void, CookieLoginError> =>
-      Either.match(Cookies.makeCookie("session_id", Redacted.value(value), { path: "/" }), {
-        onLeft: () =>
-          Effect.fail(
-            new OdooAuthenticationError({
-              reason: "invalid-credentials",
-              message: "The provided session_id is not a valid cookie value.",
-            }),
-          ),
-        onRight: (cookie) => Ref.update(cookies, (jar) => Cookies.setCookie(jar, cookie)),
-      });
+    // buffer). Seeded via `fromSetCookie` so the raw value rides the wire
+    // untouched, exactly like a server-set cookie — `Cookies.makeCookie`
+    // would percent-encode it (corrupting `+`/`=`/`/`), and an unvalidated
+    // `fromSetCookie` would silently truncate at the first `;`.
+    const seed = (value: Redacted.Redacted<string>): Effect.Effect<void, CookieLoginError> => {
+      const raw = Redacted.value(value);
+      if (raw === "" || !cookieOctets.test(raw)) {
+        return Effect.fail(
+          new OdooAuthenticationError({
+            reason: "invalid-credentials",
+            message: "The provided session_id is not a valid cookie value (RFC 6265).",
+          }),
+        );
+      }
+      return Ref.update(cookies, (jar) =>
+        Cookies.merge(jar, Cookies.fromSetCookie(`session_id=${raw}; Path=/`)),
+      );
+    };
 
     const doLogin: Effect.Effect<OdooSessionInfo, CookieLoginError> = Effect.gen(function* () {
       const jar = yield* Ref.get(cookies);

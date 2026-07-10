@@ -87,8 +87,9 @@ export const make = (
   });
 
 /** Provide the web `Transport` from an already-resolved config. Requires `CookieSession`. */
-export const layer = (config: Pick<OdooConfig, "url">): Layer.Layer<Transport, never, CookieSession> =>
-  Layer.effect(Transport, make(config));
+export const layer = (
+  config: Pick<OdooConfig, "url">,
+): Layer.Layer<Transport, never, CookieSession> => Layer.effect(Transport, make(config));
 
 /** Provide the web `Transport`, resolving `OdooConfig` from the environment. */
 export const layerConfig: Layer.Layer<Transport, ConfigError.ConfigError, CookieSession> =
