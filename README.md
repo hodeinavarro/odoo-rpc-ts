@@ -6,9 +6,12 @@ and the cookie-session web route — with a tagged-error taxonomy you can
 `catchTag` instead of parsing messages.
 
 ```
-pnpm add odoo-rpc-ts effect @effect/platform
-pnpm add @effect/platform-node        # or run in the browser with FetchHttpClient
+pnpm add odoo-rpc-ts effect@4.0.0-beta.93
+pnpm add @effect/platform-node@4.0.0-beta.93   # or run in the browser with FetchHttpClient
 ```
+
+Effect 4 is in beta and moves between betas — pin it **exact** (no caret) and
+upgrade deliberately.
 
 ## Quick start
 
@@ -24,14 +27,14 @@ import { JsonRpcTransport, OdooClient, OdooClientLive, RpcLive } from "odoo-rpc-
 const OdooLive = OdooClientLive.layer.pipe(
   Layer.provideMerge(RpcLive.layer),
   Layer.provide(JsonRpcTransport.layerConfig),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 
 // Rows decode through a schema — drift fails loudly, never a silent cast.
 const Partner = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
-  email: Schema.Union(Schema.String, Schema.Literal(false)), // Odoo sends false, not null
+  email: Schema.Union([Schema.String, Schema.Literal(false)]), // Odoo sends false, not null
 });
 
 const companies = Effect.gen(function* () {
@@ -202,7 +205,7 @@ The library depends only on the abstract `HttpClient` tag — timeouts, proxies,
 custom CAs, and retry policy are yours:
 
 ```ts
-import { FetchHttpClient, HttpClient } from "@effect/platform"
+import { FetchHttpClient, HttpClient } from "effect/unstable/http"
 import { Layer } from "effect"
 
 const TunedHttp = Layer.effect(
@@ -222,9 +225,9 @@ const created = Effect.gen(function* () {
   return yield* odoo.create("res.partner", { name: "Ada" });
 }).pipe(
   Effect.catchTags({
-    OdooValidationError: (e) => Effect.dieMessage(`rejected by a constraint: ${e.message}`),
+    OdooValidationError: (e) => Effect.die(`rejected by a constraint: ${e.message}`),
     OdooAccessError: () => Effect.succeed([]), // degrade gracefully
-    OdooAuthenticationError: (e) => Effect.dieMessage(e.reason), // "invalid-credentials" | "mfa-pending" | …
+    OdooAuthenticationError: (e) => Effect.die(e.reason), // "invalid-credentials" | "mfa-pending" | …
   }),
 );
 ```
@@ -288,7 +291,7 @@ const HarvestedOdoo = OdooClientLive.layer.pipe(
       // renew: driveLoginWindow,
     }),
   ),
-  Layer.provide(NodeHttpClient.layer),
+  Layer.provide(NodeHttpClient.layerUndici),
 );
 ```
 
@@ -326,15 +329,15 @@ Config is `effect/Config`, so tests can inject values without touching env:
 ```ts
 import { ConfigProvider } from "effect";
 
-const TestConfig = Layer.setConfigProvider(
-  ConfigProvider.fromMap(
-    new Map([
-      ["ODOO_URL", "https://mycompany.odoo.com"],
-      ["ODOO_DB", "mycompany"],
-      ["ODOO_USERNAME", "integration@mycompany.com"],
-      ["ODOO_API_KEY", "…"],
-    ]),
-  ),
+const TestConfig = ConfigProvider.layer(
+  ConfigProvider.fromEnv({
+    env: {
+      ODOO_URL: "https://mycompany.odoo.com",
+      ODOO_DB: "mycompany",
+      ODOO_USERNAME: "integration@mycompany.com",
+      ODOO_API_KEY: "…",
+    },
+  }),
 );
 ```
 
@@ -357,9 +360,9 @@ every supported version with strictly richer errors.
 ## Design, in one paragraph
 
 Everything returns `Effect<A, OdooError, R>` — nothing throws. Services are
-`Context.Tag`s wired with `Layer`s; the HTTP runtime is yours (`effect` and
-`@effect/platform` are peer dependencies, so it runs wherever Effect does,
-browser included). Responses are schema-decoded at the boundary
+`Context.Service`s wired with `Layer`s; the HTTP runtime is yours (`effect` —
+v4, incl. `effect/unstable/http` — is the only peer dependency, so it runs
+wherever Effect does, browser included). Responses are schema-decoded at the boundary
 (`SchemaDriftError` on drift), secrets stay `Redacted`, TLS is never
 disabled, and no URL/db/credential is ever assumed. The wire behavior was
 mapped from the Odoo 16–19 sources and verified against live instances; the
