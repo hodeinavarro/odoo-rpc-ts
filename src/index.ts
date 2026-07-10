@@ -144,6 +144,9 @@ export {
   ProfileStoreError,
   ProfileSecretMissingError,
   type ProfileData,
+  type CredentialProfileData,
+  type SessionProfileData,
+  type LoadedProfile,
   type ProfileProtocol,
 } from "./profiles.ts";
 export * as ProfilesLive from "./profiles.ts";

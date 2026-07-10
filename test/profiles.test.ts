@@ -45,13 +45,19 @@ describe("Profiles", () => {
       yield* profiles.saveProfile("prod-api", apiKeyConfig, "json-rpc");
 
       const loaded = yield* profiles.loadProfile("prod-api");
+      assert.strictEqual(loaded._tag, "credentials");
       assert.strictEqual(loaded.protocol, "json-rpc");
-      assert.strictEqual(loaded.config.url.href, "https://odoo.test/");
-      assert.strictEqual(loaded.config.db, "prod");
-      assert.strictEqual(loaded.config.credentials._tag, "ApiKey");
-      assert.strictEqual(loaded.config.credentials.username, "svc@odoo.test");
-      if (loaded.config.credentials._tag === "ApiKey") {
-        assert.strictEqual(Redacted.value(loaded.config.credentials.apiKey), "sk-super-secret-key");
+      if (loaded._tag === "credentials") {
+        assert.strictEqual(loaded.config.url.href, "https://odoo.test/");
+        assert.strictEqual(loaded.config.db, "prod");
+        assert.strictEqual(loaded.config.credentials._tag, "ApiKey");
+        assert.strictEqual(loaded.config.credentials.username, "svc@odoo.test");
+        if (loaded.config.credentials._tag === "ApiKey") {
+          assert.strictEqual(
+            Redacted.value(loaded.config.credentials.apiKey),
+            "sk-super-secret-key",
+          );
+        }
       }
     }).pipe(Effect.provide(inMemory)),
   );
@@ -63,12 +69,15 @@ describe("Profiles", () => {
 
       const loaded = yield* profiles.loadProfile("prod-pw");
       assert.strictEqual(loaded.protocol, "web");
-      assert.strictEqual(loaded.config.credentials._tag, "Password");
-      if (loaded.config.credentials._tag === "Password") {
-        assert.strictEqual(
-          Redacted.value(loaded.config.credentials.password),
-          "hunter2-do-not-leak",
-        );
+      assert.strictEqual(loaded._tag, "credentials");
+      if (loaded._tag === "credentials") {
+        assert.strictEqual(loaded.config.credentials._tag, "Password");
+        if (loaded.config.credentials._tag === "Password") {
+          assert.strictEqual(
+            Redacted.value(loaded.config.credentials.password),
+            "hunter2-do-not-leak",
+          );
+        }
       }
     }).pipe(Effect.provide(inMemory)),
   );
@@ -89,7 +98,9 @@ describe("Profiles", () => {
       // The metadata is present and correct, just secret-free.
       const apiMeta = stored["prod-api"] as ProfileData;
       assert.strictEqual(apiMeta.credentialKind, "api-key");
-      assert.strictEqual(apiMeta.username, "svc@odoo.test");
+      if (apiMeta.credentialKind === "api-key") {
+        assert.strictEqual(apiMeta.username, "svc@odoo.test");
+      }
       assert.notProperty(apiMeta, "apiKey");
       assert.notProperty(apiMeta, "password");
 
@@ -166,6 +177,85 @@ describe("Profiles", () => {
       const listed = yield* profiles.listProfiles();
       assert.notProperty(listed, "prod-api");
       const secret = yield* secrets.get("prod-api:api-key");
+      assert.isTrue(Option.isNone(secret));
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("round-trips a harvested-session profile through saveSessionProfile/load", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      const cookie = Redacted.make("f00dfaceharvestedsessioncookie");
+      yield* profiles.saveSessionProfile("prod-session", new URL("https://odoo.test/"), cookie);
+
+      const loaded = yield* profiles.loadProfile("prod-session");
+      assert.strictEqual(loaded._tag, "session");
+      if (loaded._tag === "session") {
+        // The session arm carries url + cookie — the exact fromExisting inputs.
+        assert.strictEqual(loaded.url.href, "https://odoo.test/");
+        assert.strictEqual(Redacted.value(loaded.sessionId), "f00dfaceharvestedsessioncookie");
+        assert.strictEqual(loaded.protocol, "web");
+        // NEVER a fabricated OdooConfig with fake credentials.
+        assert.notProperty(loaded, "config");
+      }
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("CRITICAL: session metadata never contains the cookie value", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      yield* profiles.saveSessionProfile(
+        "prod-session",
+        new URL("https://odoo.test/"),
+        Redacted.make("f00dfaceharvestedsessioncookie"),
+      );
+
+      const stored = yield* profiles.listProfiles();
+      assert.notInclude(JSON.stringify(stored), "f00dfaceharvestedsessioncookie");
+      const meta = stored["prod-session"] as ProfileData;
+      assert.strictEqual(meta.credentialKind, "session");
+      assert.strictEqual(meta.protocol, "web");
+      assert.notProperty(meta, "username");
+      assert.notProperty(meta, "db");
+
+      // The cookie is reachable ONLY through the SecretStore, under its account.
+      const secrets = yield* SecretStore;
+      const direct = yield* secrets.get("prod-session:session");
+      assert.isTrue(Option.isSome(direct));
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("loadProfile fails with ProfileSecretMissingError when the cookie is gone", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      const secrets = yield* SecretStore;
+      yield* profiles.saveSessionProfile(
+        "prod-session",
+        new URL("https://odoo.test/"),
+        Redacted.make("f00dfaceharvestedsessioncookie"),
+      );
+      yield* secrets.remove("prod-session:session");
+
+      const error = yield* profiles.loadProfile("prod-session").pipe(Effect.flip);
+      assert.instanceOf(error, ProfileSecretMissingError);
+      assert.strictEqual(error.account, "prod-session:session");
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("removeProfile drops a session profile's cookie and metadata", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      const secrets = yield* SecretStore;
+      yield* profiles.saveSessionProfile(
+        "prod-session",
+        new URL("https://odoo.test/"),
+        Redacted.make("f00dfaceharvestedsessioncookie"),
+      );
+
+      yield* profiles.removeProfile("prod-session");
+
+      const listed = yield* profiles.listProfiles();
+      assert.notProperty(listed, "prod-session");
+      const secret = yield* secrets.get("prod-session:session");
       assert.isTrue(Option.isNone(secret));
     }).pipe(Effect.provide(inMemory)),
   );

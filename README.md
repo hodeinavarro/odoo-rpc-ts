@@ -189,6 +189,10 @@ const pdf = yield* ReportService.download(session, {
 Connection profiles never serialize secrets: `ProfileData` holds the metadata,
 secrets cross only as `Redacted` through a `SecretStore` you implement (OS
 keyring in Node, IndexedDB in the browser); in-memory layers ship for tests.
+Besides api-key/password presets, `saveSessionProfile(name, url, sessionId)`
+stores a harvested `session_id` cookie (the TOTP/SSO flow — no credentials
+exist); `loadProfile` returns a tagged union, and its `"session"` arm feeds
+`CookieSessionLive.fromExisting` directly instead of fabricating a config.
 
 ## Bring your own HTTP layer
 

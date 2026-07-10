@@ -9,19 +9,39 @@ import type { OdooConfig, OdooCredentials } from "./config.ts";
 export type ProfileProtocol = "json-rpc" | "json-2" | "web";
 
 /**
- * The serializable, **secret-free** part of a connection preset. This is the
- * ONLY shape {@link ProfileStorage} ever sees — the credential secret lives in
- * {@link SecretStore} and is never a field here. `credentialKind` records which
- * arm of {@link OdooCredentials} to reconstruct, so the secret can be re-homed
- * without guessing.
+ * The serializable, **secret-free** metadata of a credential-backed preset.
+ * `credentialKind` records which arm of {@link OdooCredentials} to
+ * reconstruct, so the secret can be re-homed without guessing.
  */
-export interface ProfileData {
+export interface CredentialProfileData {
   readonly url: string;
   readonly db: string;
   readonly username: string;
   readonly credentialKind: "api-key" | "password";
   readonly protocol: ProfileProtocol;
 }
+
+/**
+ * The serializable, **secret-free** metadata of a harvested-session preset:
+ * the stored secret is the `session_id` cookie value itself, not a credential
+ * (the flow exists precisely because there ARE no credentials — TOTP/SSO
+ * accounts cannot password-auth). No `db`/`username`: the server binds both
+ * to the cookie, and `get_session_info` reports them live. A session rides
+ * the cookie-authenticated `/web` routes, so `protocol` is always `"web"`.
+ */
+export interface SessionProfileData {
+  readonly url: string;
+  readonly credentialKind: "session";
+  readonly protocol: "web";
+}
+
+/**
+ * The serializable, **secret-free** part of a connection preset. This is the
+ * ONLY shape {@link ProfileStorage} ever sees — the secret (credential or
+ * session cookie) lives in {@link SecretStore} and is never a field here.
+ * Discriminated on `credentialKind`.
+ */
+export type ProfileData = CredentialProfileData | SessionProfileData;
 
 /**
  * A profile's storage operation failed at the consumer-supplied backend (keyring
@@ -88,14 +108,17 @@ export class ProfileStorage extends Context.Tag("odoo-rpc-ts/ProfileStorage")<
 const accountOf = (name: string, credentialKind: ProfileData["credentialKind"]): string =>
   `${name}:${credentialKind}`;
 
-const credentialKindOf = (c: OdooCredentials): ProfileData["credentialKind"] =>
+const credentialKindOf = (c: OdooCredentials): CredentialProfileData["credentialKind"] =>
   c._tag === "ApiKey" ? "api-key" : "password";
 
 const secretOf = (c: OdooCredentials): Redacted.Redacted<string> =>
   c._tag === "ApiKey" ? c.apiKey : c.password;
 
 /** Rebuild the live {@link OdooConfig} from stored metadata + a resolved secret. */
-const reconstructConfig = (data: ProfileData, secret: Redacted.Redacted<string>): OdooConfig => ({
+const reconstructConfig = (
+  data: CredentialProfileData,
+  secret: Redacted.Redacted<string>,
+): OdooConfig => ({
   url: new URL(data.url),
   db: data.db,
   credentials:
@@ -103,6 +126,30 @@ const reconstructConfig = (data: ProfileData, secret: Redacted.Redacted<string>)
       ? { _tag: "ApiKey", username: data.username, apiKey: secret }
       : { _tag: "Password", username: data.username, password: secret },
 });
+
+/**
+ * What {@link Profiles.loadProfile} hands back — tagged so the consumer can
+ * tell a credential preset from a harvested-session preset WITHOUT this
+ * service ever fabricating an {@link OdooConfig} around a fake credential:
+ *
+ * - `"credentials"` — a real config; feed it to `EphemeralAuth` /
+ *   `CookieSessionLive.layerConfig` as usual.
+ * - `"session"` — no credentials exist; feed `url` + `sessionId` to
+ *   `CookieSessionLive.fromExisting` (its {@link ExistingSessionOptions}
+ *   shape) over the web transport.
+ */
+export type LoadedProfile =
+  | {
+      readonly _tag: "credentials";
+      readonly config: OdooConfig;
+      readonly protocol: ProfileProtocol;
+    }
+  | {
+      readonly _tag: "session";
+      readonly url: URL;
+      readonly sessionId: Redacted.Redacted<string>;
+      readonly protocol: "web";
+    };
 
 /**
  * Named connection profiles over a {@link SecretStore} + {@link ProfileStorage}
@@ -127,17 +174,30 @@ export class Profiles extends Context.Tag("odoo-rpc-ts/Profiles")<
     ) => Effect.Effect<void, ProfileStoreError>;
 
     /**
+     * Persist a harvested-session preset: the `session_id` cookie value is
+     * the stored secret (same secret-before-metadata ordering as
+     * {@link saveProfile}). No credentials are involved — this is the flow
+     * for TOTP/SSO accounts whose cookie was minted by a real `/web/login`
+     * (e.g. an embedded login window). Overwrites any existing profile of
+     * the same name.
+     */
+    readonly saveSessionProfile: (
+      name: string,
+      url: URL,
+      sessionId: Redacted.Redacted<string>,
+    ) => Effect.Effect<void, ProfileStoreError>;
+
+    /**
      * Reconstruct a preset: reads metadata, then resolves the secret from
-     * {@link SecretStore} and rebuilds the {@link OdooConfig}. Fails with
-     * {@link ProfileSecretMissingError} when the profile is unknown or its secret
-     * is absent — never returns a config with a placeholder secret.
+     * {@link SecretStore}. A credential preset rebuilds the {@link OdooConfig};
+     * a session preset returns the harvested cookie — see {@link LoadedProfile}
+     * for how to consume each arm. Fails with {@link ProfileSecretMissingError}
+     * when the profile is unknown or its secret is absent — never returns a
+     * config or session with a placeholder secret.
      */
     readonly loadProfile: (
       name: string,
-    ) => Effect.Effect<
-      { readonly config: OdooConfig; readonly protocol: ProfileProtocol },
-      ProfileStoreError | ProfileSecretMissingError
-    >;
+    ) => Effect.Effect<LoadedProfile, ProfileStoreError | ProfileSecretMissingError>;
 
     /** All stored presets by name — secret-free by construction. */
     readonly listProfiles: () => Effect.Effect<Record<string, ProfileData>, ProfileStoreError>;
@@ -178,12 +238,22 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
         yield* storage.save({ ...existing, [name]: data });
       });
 
+    const saveSessionProfile = (
+      name: string,
+      url: URL,
+      sessionId: Redacted.Redacted<string>,
+    ): Effect.Effect<void, ProfileStoreError> =>
+      Effect.gen(function* () {
+        const data: ProfileData = { url: url.href, credentialKind: "session", protocol: "web" };
+        // Same ordering as saveProfile: secret (the cookie) before metadata.
+        yield* secrets.set(accountOf(name, "session"), sessionId);
+        const existing = yield* storage.load();
+        yield* storage.save({ ...existing, [name]: data });
+      });
+
     const loadProfile = (
       name: string,
-    ): Effect.Effect<
-      { readonly config: OdooConfig; readonly protocol: ProfileProtocol },
-      ProfileStoreError | ProfileSecretMissingError
-    > =>
+    ): Effect.Effect<LoadedProfile, ProfileStoreError | ProfileSecretMissingError> =>
       Effect.gen(function* () {
         const all = yield* storage.load();
         const data = all[name];
@@ -196,10 +266,21 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
         if (Option.isNone(maybeSecret)) {
           return yield* new ProfileSecretMissingError({ name, account });
         }
+        if (data.credentialKind === "session") {
+          // NEVER fabricate an OdooConfig around a session cookie — there is
+          // no credential; the consumer feeds this to CookieSessionLive.fromExisting.
+          return {
+            _tag: "session",
+            url: new URL(data.url),
+            sessionId: maybeSecret.value,
+            protocol: data.protocol,
+          } as const;
+        }
         return {
+          _tag: "credentials",
           config: reconstructConfig(data, maybeSecret.value),
           protocol: data.protocol,
-        };
+        } as const;
       });
 
     const listProfiles = (): Effect.Effect<Record<string, ProfileData>, ProfileStoreError> =>
@@ -224,7 +305,7 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
         yield* storage.save(rest);
       });
 
-    return { saveProfile, loadProfile, listProfiles, removeProfile };
+    return { saveProfile, saveSessionProfile, loadProfile, listProfiles, removeProfile };
   }),
 );
 
