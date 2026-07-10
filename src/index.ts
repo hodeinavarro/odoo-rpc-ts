@@ -29,15 +29,16 @@ export {
   type DomainOperator,
 } from "./domain.ts";
 
-// Version resolution and capability derivation.
+// Version resolution and WIRE-capability derivation (the app layer owns
+// product capabilities — see WireCapabilities).
 export {
   VersionResolver,
   CommonVersionResponse,
   ServerVersionInfo,
   parseVersionInfo,
-  deriveCapabilities,
+  deriveWireCapabilities,
   type OdooVersion,
-  type OdooCapabilities,
+  type WireCapabilities,
   type ResolvedVersion,
 } from "./version.ts";
 export * as VersionResolverLive from "./version-live.ts";

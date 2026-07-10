@@ -16,7 +16,7 @@ import { defineRecord, Many2One, One2Many } from "../src/records/index.ts";
 import { layer as rpcLayer } from "../src/rpc.ts";
 import type { CallKwParams } from "../src/transport.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
-import { deriveCapabilities, parseVersionInfo, VersionResolver } from "../src/version.ts";
+import { deriveWireCapabilities, parseVersionInfo, VersionResolver } from "../src/version.ts";
 
 const Company = defineRecord("res.company", { name: Schema.String });
 const Contact = defineRecord("res.partner.child", { name: Schema.String });
@@ -36,7 +36,7 @@ const PARTNER_RECORDS = [
 const resolverLayer = (major: number): Layer.Layer<VersionResolver> => {
   const version = parseVersionInfo([major, 0, 0, "final", 0]);
   return Layer.succeed(VersionResolver, {
-    resolve: Effect.succeed({ version, capabilities: deriveCapabilities(version) }),
+    resolve: Effect.succeed({ version, capabilities: deriveWireCapabilities(version) }),
   });
 };
 

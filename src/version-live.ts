@@ -5,7 +5,7 @@ import type { OdooTransportError } from "./errors/transport.ts";
 import * as SingleFlight from "./internal/singleFlight.ts";
 import {
   type CommonVersionResponse,
-  deriveCapabilities,
+  deriveWireCapabilities,
   parseVersionInfo,
   type ResolvedVersion,
   type ServerVersionInfo,
@@ -26,15 +26,20 @@ export type VersionProbeResponse =
   | CommonVersionResponse
   | { readonly version: string; readonly version_info: ServerVersionInfo };
 
-/** The typed failures a transport-provided probe may surface. */
-export type ProbeError = OdooTransportError | SchemaDriftError | ProtocolUnsupportedError;
+/**
+ * The typed failures a transport-provided VERSION probe may surface. The
+ * `VersionProbe` prefix is deliberate: the bare word "probe" belongs to the
+ * application layer's product-capability probing (`fields_get` reachability);
+ * this package only ever probes the server version.
+ */
+export type VersionProbeError = OdooTransportError | SchemaDriftError | ProtocolUnsupportedError;
 
 const extractInfo = (response: VersionProbeResponse): ServerVersionInfo =>
   "server_version_info" in response ? response.server_version_info : response.version_info;
 
 const resolveVersion = (response: VersionProbeResponse): ResolvedVersion => {
   const version = parseVersionInfo(extractInfo(response));
-  return { version, capabilities: deriveCapabilities(version) };
+  return { version, capabilities: deriveWireCapabilities(version) };
 };
 
 /**
@@ -46,7 +51,7 @@ const resolveVersion = (response: VersionProbeResponse): ResolvedVersion => {
  * single-flight caches the mapped {@link ResolvedVersion}.
  */
 export const make = (
-  probe: Effect.Effect<VersionProbeResponse, ProbeError>,
+  probe: Effect.Effect<VersionProbeResponse, VersionProbeError>,
 ): Effect.Effect<VersionResolver["Type"], never> =>
   Effect.gen(function* () {
     const cache = yield* SingleFlight.make(Effect.map(probe, resolveVersion));
@@ -58,5 +63,5 @@ export const make = (
  * packages construct the probe (endpoint + decode) and pass it here.
  */
 export const layer = (
-  probe: Effect.Effect<VersionProbeResponse, ProbeError>,
+  probe: Effect.Effect<VersionProbeResponse, VersionProbeError>,
 ): Layer.Layer<VersionResolver> => Layer.effect(VersionResolver, make(probe));

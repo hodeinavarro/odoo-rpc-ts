@@ -34,8 +34,14 @@ export interface OdooVersion {
   readonly raw: ServerVersionInfo;
 }
 
-/** What a given server version can and cannot do, on the wire. */
-export interface OdooCapabilities {
+/**
+ * What a given server version can and cannot do, ON THE WIRE. This package
+ * owns WIRE capabilities derived from the server version; the application
+ * layer owns PRODUCT capabilities (derived from `fields_get` reachability,
+ * installed modules, …) — the bare words "capabilities"/"probe" belong to the
+ * app layer, hence the `Wire`/`VersionProbe` prefixes here.
+ */
+export interface WireCapabilities {
   /** The JSON-2 `/json/2` bearer API exists (Odoo 19+). */
   readonly supportsJson2: boolean;
   /** `/jsonrpc` and `/xmlrpc` are deprecated upstream (Odoo 19+). */
@@ -50,10 +56,10 @@ export interface OdooCapabilities {
   readonly supportsWebReadSpec: boolean;
 }
 
-/** A resolved version together with its derived capabilities. */
+/** A resolved version together with its derived wire capabilities. */
 export interface ResolvedVersion {
   readonly version: OdooVersion;
-  readonly capabilities: OdooCapabilities;
+  readonly capabilities: WireCapabilities;
 }
 
 const asNumber = (value: number | string | undefined): number =>
@@ -74,7 +80,7 @@ export const parseVersionInfo = (raw: ServerVersionInfo): OdooVersion => ({
 
 /** Derive wire capabilities from a version. JSON-2 lands, and the legacy RPC
  * routes are deprecated, at major 19. */
-export const deriveCapabilities = (version: OdooVersion): OdooCapabilities => ({
+export const deriveWireCapabilities = (version: OdooVersion): WireCapabilities => ({
   supportsJson2: version.major >= 19,
   jsonRpcDeprecated: version.major >= 19,
   supportsWebReadSpec: version.major >= 17,
