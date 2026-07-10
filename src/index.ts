@@ -54,8 +54,50 @@ export {
   type CallOptions,
   type ReadGroupOptions,
   type NameSearchOptions,
+  type TypedOptions,
+  type TypedReadOptions,
 } from "./client.ts";
 export * as OdooClientLive from "./client.ts";
+
+// Typed records — candidate B (explicit traversal: Many2OneRef, TypedRecordSet)
+// and candidate A (declared prefetch: defineRecord/Many2One/One2Many + the
+// pure specification compiler). Relation/temporal decode vocabulary is shared.
+export {
+  // Relation & temporal decode schemas (candidate B row declarations).
+  Many2OneRef,
+  Many2OneRefFromWire,
+  Many2OneRefOrNull,
+  Many2OneRefValue,
+  OdooDate,
+  OdooDateOrNull,
+  OdooDateTime,
+  OdooDateTimeOrNull,
+  // Pure join helpers + the explicit-traversal snapshot.
+  collectRefIds,
+  makeRelatedMap,
+  makeTypedRecordSet,
+  refId,
+  type HasId,
+  type Many2OneRefField,
+  type RefOrId,
+  type RelatedMap,
+  type TypedRecordSet,
+  // Declared-prefetch model declaration + compilation (candidate A).
+  defineRecord,
+  Many2One,
+  One2Many,
+  compileSpecification,
+  hasRelations,
+  EmptyRecordSpecError,
+  RecordSpecCycleError,
+  type FieldInput,
+  type FieldMeta,
+  type Many2OneDecl,
+  type One2ManyDecl,
+  type RecordSpec,
+  type RowEncoded,
+  type RowType,
+} from "./records/index.ts";
 
 // Transports — one Layer per protocol, all implementing the Transport tag.
 export * as JsonRpcTransport from "./transports/jsonrpc.ts";

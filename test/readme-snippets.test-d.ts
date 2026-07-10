@@ -185,3 +185,82 @@ const testLayer = OdooClientLive.layer.pipe(
   Layer.provide(fake.layer),
 );
 void testLayer;
+
+// --- typed records: declared prefetch ----------------------------------------
+
+import {
+  Command,
+  defineRecord,
+  Many2One,
+  Many2OneRefOrNull,
+  OdooDateTime,
+} from "../src/index.ts";
+
+const CompanyRec = defineRecord("res.company", { name: Schema.String });
+const PartnerRec = defineRecord("res.partner", {
+  name: Schema.String,
+  create_date: OdooDateTime,
+  company_id: Many2One(CompanyRec),
+});
+
+export const declaredRows = Effect.gen(function* () {
+  const odoo = yield* OdooClient;
+  const rows = yield* odoo.searchTyped(PartnerRec, {
+    domain: [["is_company", "=", true]],
+    limit: 10,
+  });
+  return rows[0]?.company_id?.name ?? null;
+});
+
+// --- typed records: explicit traversal ---------------------------------------
+
+const PartnerRow = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  company_id: Many2OneRefOrNull,
+});
+const CompanyRow = Schema.Struct({ id: Schema.Number, name: Schema.String });
+
+export const joinedPairs = Effect.gen(function* () {
+  const odoo = yield* OdooClient;
+  const rows = yield* odoo.searchRecordsTyped("res.partner", {}, PartnerRow);
+  return yield* rows.joinRelated("company_id", "res.company", CompanyRow);
+});
+
+// --- commands ------------------------------------------------------------------
+
+export const writeWithCommands = Effect.gen(function* () {
+  const odoo = yield* OdooClient;
+  return yield* odoo.write("res.partner", [1], {
+    child_ids: [Command.create({ name: "New contact" }), Command.link(7)],
+  });
+});
+
+// --- services -------------------------------------------------------------------
+
+import { DbService, ReportService } from "../src/index.ts";
+
+declare const master: Redacted.Redacted<string>;
+
+export const dbAndReports = Effect.gen(function* () {
+  const names = yield* DbService.listDatabases(url);
+  yield* DbService.duplicate(url, master, "prod", "staging");
+  const session = yield* CookieSession;
+  const pdf = yield* ReportService.download(session, {
+    reportName: "base.report_irmodeloverview",
+    ids: [1],
+  });
+  return [names.length, pdf.length] as const;
+});
+
+// --- bring your own http layer ---------------------------------------------------
+
+import { FetchHttpClient, HttpClient } from "@effect/platform";
+
+const TunedHttp = Layer.effect(
+  HttpClient.HttpClient,
+  Effect.map(HttpClient.HttpClient, (client) =>
+    client.pipe(HttpClient.retryTransient({ times: 3 })),
+  ),
+).pipe(Layer.provide(FetchHttpClient.layer));
+void TunedHttp;

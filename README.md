@@ -47,8 +47,11 @@ await companies.pipe(Effect.provide(OdooLive), Effect.runPromise);
 ```
 
 `OdooClient` gives you `searchRead`, `search`, `read`, `create`, `write`,
-`unlink`, `fieldsGet`, and `searchCount` — every op works over every
-transport. `Rpc.callKw` is the escape hatch for anything else.
+`unlink`, `fieldsGet`, `searchCount`, `readGroup`, `nameSearch`, `ref`
+(resolve an XML id to `[model, id]`), and a generic `call` escape hatch —
+every op works over every transport. `Rpc.callKw` sits underneath for
+anything else, and `RpcLive.layerSeeded()` seeds the user's server-side
+context (`lang`, `tz`) as the base tier of every call.
 
 ## Everyday workflows
 
@@ -99,6 +102,100 @@ const allPartnerIds = Effect.gen(function* () {
     if (page.length < 500) return out;
   }
 });
+```
+
+## Typed records and relations
+
+Two explicit ways to traverse relations — both make N+1 storms structurally
+impossible, and every RPC stays visible:
+
+**Declared prefetch** (Odoo 17+) — declare the graph, get ONE `web_search_read`:
+
+```ts
+import { defineRecord, Many2One, OdooClient, OdooDateTime } from "odoo-rpc-ts"
+import { Schema } from "effect"
+
+const Company = defineRecord("res.company", { name: Schema.String })
+const Partner = defineRecord("res.partner", {
+  name: Schema.String,
+  create_date: OdooDateTime,            // parsed as UTC, never localized
+  company_id: Many2One(Company),        // row.company_id?.name — already fetched
+})
+
+const rows = Effect.gen(function* () {
+  const odoo = yield* OdooClient
+  return yield* odoo.searchTyped(Partner, { domain: [["is_company", "=", true]], limit: 10 })
+})
+```
+
+Provide a `VersionResolver` layer and the 17+ gate holds automatically: a
+declared relation on Odoo 16 fails with `ProtocolUnsupportedError` before any
+round trip, while relation-free records degrade to plain `search_read`.
+`saveTyped` (17+) writes and returns the fresh nested snapshot in one call.
+
+**Explicit traversal** (all versions) — rows keep `[id, name]` refs; batch the
+hop when you need it, exactly one deduped `read`:
+
+```ts
+import { Many2OneRefOrNull, OdooClient } from "odoo-rpc-ts"
+
+const PartnerRow = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+  company_id: Many2OneRefOrNull,        // Odoo's [id, name] pair; false -> null
+})
+const CompanyRow = Schema.Struct({ id: Schema.Number, name: Schema.String })
+
+const pairs = Effect.gen(function* () {
+  const odoo = yield* OdooClient
+  const rows = yield* odoo.searchRecordsTyped("res.partner", {}, PartnerRow)
+  return yield* rows.joinRelated("company_id", "res.company", CompanyRow) // ONE read
+})
+```
+
+## x2many writes without magic tuples
+
+```ts
+import { Command } from "odoo-rpc-ts"
+
+yield* odoo.write("res.partner", [companyId], {
+  child_ids: [Command.create({ name: "New contact" }), Command.link(existingId)],
+})
+```
+
+## Services: databases, reports, profiles
+
+```ts
+import { DbService, ReportService } from "odoo-rpc-ts"
+
+// database administration (master-password gated; Node-oriented)
+const names = yield* DbService.listDatabases(url)
+yield* DbService.duplicate(url, master, "prod", "staging")
+
+// report downloads over the cookie session — works on ALL of 16-19
+const pdf = yield* ReportService.download(session, {
+  reportName: "base.report_irmodeloverview",
+  ids: [modelId],
+})
+```
+
+Connection profiles never serialize secrets: `ProfileData` holds the metadata,
+secrets cross only as `Redacted` through a `SecretStore` you implement (OS
+keyring in Node, IndexedDB in the browser); in-memory layers ship for tests.
+
+## Bring your own HTTP layer
+
+The library depends only on the abstract `HttpClient` tag — timeouts, proxies,
+custom CAs, and retry policy are yours:
+
+```ts
+import { FetchHttpClient, HttpClient } from "@effect/platform"
+import { Layer } from "effect"
+
+const TunedHttp = Layer.effect(
+  HttpClient.HttpClient,
+  Effect.map(HttpClient.HttpClient, (client) => client.pipe(HttpClient.retryTransient({ times: 3 }))),
+).pipe(Layer.provide(FetchHttpClient.layer))
 ```
 
 ## Errors are a typed API
