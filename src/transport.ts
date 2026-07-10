@@ -53,7 +53,7 @@ export type TransportDialect = "execute-kw" | "json2";
  * and the cookie-session `WebTransport` all provide this tag; application code
  * depends only on it and stays protocol-agnostic.
  */
-export class Transport extends Context.Tag("odoo-rpc-ts/Transport")<
+export class Transport extends Context.Service<
   Transport,
   {
     /** The wire dialect — see {@link TransportDialect}. */
@@ -69,4 +69,4 @@ export class Transport extends Context.Tag("odoo-rpc-ts/Transport")<
      */
     readonly callKw: (params: CallKwParams) => Effect.Effect<unknown, TransportCallError>;
   }
->() {}
+>()("odoo-rpc-ts/Transport") {}

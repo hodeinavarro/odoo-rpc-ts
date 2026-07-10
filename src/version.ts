@@ -9,7 +9,7 @@ import type { OdooTransportError } from "./errors/transport.ts";
  * leniently as a mixed array so a shape change on a future version surfaces as
  * a decode drift rather than a silent truncation.
  */
-export const ServerVersionInfo = Schema.Array(Schema.Union(Schema.Number, Schema.String));
+export const ServerVersionInfo = Schema.Array(Schema.Union([Schema.Number, Schema.String]));
 export type ServerVersionInfo = typeof ServerVersionInfo.Type;
 
 /**
@@ -91,7 +91,7 @@ export const deriveWireCapabilities = (version: OdooVersion): WireCapabilities =
  * transport is provided. Implementation ships later; this is the seam so the
  * client can gate protocol choices on capabilities.
  */
-export class VersionResolver extends Context.Tag("odoo-rpc-ts/VersionResolver")<
+export class VersionResolver extends Context.Service<
   VersionResolver,
   {
     readonly resolve: Effect.Effect<
@@ -99,4 +99,4 @@ export class VersionResolver extends Context.Tag("odoo-rpc-ts/VersionResolver")<
       OdooTransportError | SchemaDriftError | ProtocolUnsupportedError
     >;
   }
->() {}
+>()("odoo-rpc-ts/VersionResolver") {}

@@ -1,4 +1,4 @@
-import { ConfigError, Effect, Layer, Redacted, Ref, Schema } from "effect";
+import { Config, Effect, Layer, Redacted, Ref, Schema } from "effect";
 import { OdooConfig, type OdooCredentials } from "../config.ts";
 import { OdooAuthenticationError } from "../errors/auth.ts";
 import type { FaultCallSite } from "../errors/mapFault.ts";
@@ -57,9 +57,10 @@ const roundTrip = (
   site: FaultCallSite,
 ): Effect.Effect<unknown, RoundTripError> =>
   Effect.gen(function* () {
+    // v4 rename: bodyUnsafeJson → bodyJsonUnsafe.
     const request = HttpClientRequest.post(endpoint).pipe(
       HttpClientRequest.setHeader("Content-Type", "application/json"),
-      HttpClientRequest.bodyUnsafeJson(buildRequest(params, id)),
+      HttpClientRequest.bodyJsonUnsafe(buildRequest(params, id)),
     );
 
     // HttpClientError covers both connection failures and a non-JSON body.
@@ -70,7 +71,7 @@ const roundTrip = (
       ),
     );
 
-    const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(payload).pipe(
+    const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(payload).pipe(
       Effect.mapError(
         (cause) => new SchemaDriftError({ context: "odoo.jsonrpc response", payload, cause }),
       ),
@@ -186,7 +187,7 @@ export const layer = (config: OdooConfig): Layer.Layer<Transport, never, HttpCli
  * `JsonRpcTransport` as a `Layer` that reads {@link OdooConfig} from the ambient
  * `ConfigProvider`. Fails with `ConfigError` if required values are missing.
  */
-export const layerConfig: Layer.Layer<Transport, ConfigError.ConfigError, HttpClient.HttpClient> =
+export const layerConfig: Layer.Layer<Transport, Config.ConfigError, HttpClient.HttpClient> =
   Layer.effect(Transport, Effect.flatMap(OdooConfig, make));
 
 /**
@@ -208,7 +209,7 @@ export const makeVersion = (
       {},
       {},
     );
-    return yield* Schema.decodeUnknown(CommonVersionResponse)(raw).pipe(
+    return yield* Schema.decodeUnknownEffect(CommonVersionResponse)(raw).pipe(
       Effect.mapError(
         (cause) =>
           new SchemaDriftError({ context: "odoo.jsonrpc common.version", payload: raw, cause }),
