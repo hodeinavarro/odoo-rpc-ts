@@ -6,3 +6,4 @@ coverage
 
 # integration harness state (generated env files with secrets)
 harness/.state/
+.zed/
