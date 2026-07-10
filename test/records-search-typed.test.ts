@@ -18,6 +18,14 @@ import type { CallKwParams } from "../src/transport.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
 import { deriveWireCapabilities, parseVersionInfo, VersionResolver } from "../src/version.ts";
 
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
+
 const Company = defineRecord("res.company", { name: Schema.String });
 const Contact = defineRecord("res.partner.child", { name: Schema.String });
 const Partner = defineRecord("res.partner", {
@@ -42,7 +50,7 @@ const resolverLayer = (major: number): Layer.Layer<VersionResolver> => {
 
 const runWithLog = <A, E>(
   handlers: FakeTransport.FakeHandlers,
-  build: (client: OdooClient["Type"]) => Effect.Effect<A, E>,
+  build: (client: typeof OdooClient.Service) => Effect.Effect<A, E>,
   resolver?: Layer.Layer<VersionResolver>,
 ): Effect.Effect<{ value: A; log: ReadonlyArray<CallKwParams> }, E> =>
   Effect.gen(function* () {
@@ -92,10 +100,11 @@ describe("searchTyped — one web_search_read, exact spec, nested decode", () =>
         (c) => c.searchTyped(Partner),
       ).pipe(Effect.map((r) => r.value), Effect.exit);
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Fail") {
-        assert.isTrue(exit.cause.error instanceof SchemaDriftError);
-        if (exit.cause.error instanceof SchemaDriftError) {
-          assert.strictEqual(exit.cause.error.context, "res.partner.web_search_read");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.isTrue(err instanceof SchemaDriftError);
+        if (err instanceof SchemaDriftError) {
+          assert.strictEqual(err.context, "res.partner.web_search_read");
         }
       }
     }),
@@ -111,8 +120,9 @@ describe("version gate", () => {
         resolverLayer(16),
       );
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "ProtocolUnsupportedError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "ProtocolUnsupportedError");
       }
       // No round trip happened — the gate fired first.
       assert.strictEqual(method(log, "web_search_read").length, 0);
@@ -207,8 +217,9 @@ describe("readTyped & saveTyped call shapes", () => {
         (c) => c.saveTyped(FlatPartner, [1], { name: "x" }, { serverMajor: 16 }).pipe(Effect.exit),
       );
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "ProtocolUnsupportedError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "ProtocolUnsupportedError");
       }
       assert.strictEqual(method(log, "web_save").length, 0);
     }),

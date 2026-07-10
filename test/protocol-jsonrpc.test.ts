@@ -31,12 +31,12 @@ describe("buildRequest", () => {
 });
 
 describe("JsonRpcResponse schema", () => {
-  const decode = Schema.decodeUnknownEither(JsonRpcResponse);
+  const decode = Schema.decodeUnknownResult(JsonRpcResponse);
 
   it.effect("decodes a success envelope, keeping result opaque", () =>
     Effect.gen(function* () {
       yield* Effect.void;
-      const decoded = yield* Schema.decodeUnknown(JsonRpcSuccessResponse)({
+      const decoded = yield* Schema.decodeUnknownEffect(JsonRpcSuccessResponse)({
         jsonrpc: "2.0",
         id: 1,
         result: [{ id: 42 }],
@@ -48,7 +48,7 @@ describe("JsonRpcResponse schema", () => {
   it.effect("decodes an error envelope", () =>
     Effect.gen(function* () {
       yield* Effect.void;
-      const decoded = yield* Schema.decodeUnknown(JsonRpcErrorResponse)({
+      const decoded = yield* Schema.decodeUnknownEffect(JsonRpcErrorResponse)({
         jsonrpc: "2.0",
         id: 1,
         error: { code: 100, message: "Session expired" },
@@ -60,7 +60,7 @@ describe("JsonRpcResponse schema", () => {
   it.effect("prefers the error branch over a spurious result match", () =>
     Effect.gen(function* () {
       yield* Effect.void;
-      const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)({
+      const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)({
         jsonrpc: "2.0",
         id: 1,
         error: { code: 200, message: "boom", data: { name: "odoo.exceptions.UserError" } },
@@ -72,8 +72,8 @@ describe("JsonRpcResponse schema", () => {
   it.effect("rejects a garbage body as drift (no jsonrpc envelope)", () =>
     Effect.gen(function* () {
       yield* Effect.void;
-      assert.isTrue(decode({ foo: "bar" })._tag === "Left");
-      assert.isTrue(decode(42)._tag === "Left");
+      assert.isTrue(decode({ foo: "bar" })._tag === "Failure");
+      assert.isTrue(decode(42)._tag === "Failure");
     }),
   );
 });

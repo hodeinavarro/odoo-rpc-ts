@@ -51,7 +51,7 @@ export const JsonRpcErrorData = Schema.Struct({
   debug: Schema.optional(Schema.String),
   message: Schema.optional(Schema.String),
   arguments: Schema.optional(Schema.Array(Schema.Unknown)),
-  context: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  context: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
 });
 export type JsonRpcErrorData = typeof JsonRpcErrorData.Type;
 
@@ -65,7 +65,7 @@ export type JsonRpcErrorPayload = typeof JsonRpcErrorPayload.Type;
 
 // `id` echoes what we sent, but a few Odoo error paths return `null` — accept
 // any of the JSON-RPC-legal id shapes rather than drift on the envelope.
-const JsonRpcId = Schema.Union(Schema.Number, Schema.String, Schema.Null);
+const JsonRpcId = Schema.Union([Schema.Number, Schema.String, Schema.Null]);
 
 /** A JSON-RPC error response: `{jsonrpc, id?, error:{code, message, data?}}`. */
 export const JsonRpcErrorResponse = Schema.Struct({
@@ -89,7 +89,7 @@ export type JsonRpcSuccessResponse = typeof JsonRpcSuccessResponse.Type;
  * shape (e.g. a proxy's HTML error page decoded as garbage) fails to decode →
  * the caller raises `SchemaDriftError`.
  */
-export const JsonRpcResponse = Schema.Union(JsonRpcErrorResponse, JsonRpcSuccessResponse);
+export const JsonRpcResponse = Schema.Union([JsonRpcErrorResponse, JsonRpcSuccessResponse]);
 export type JsonRpcResponse = typeof JsonRpcResponse.Type;
 
 /** Normalize a lenient `error.data` (or its absence) into a {@link RawServerFault}. */

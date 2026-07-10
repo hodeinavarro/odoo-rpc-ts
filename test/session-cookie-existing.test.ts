@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Layer, Option, Redacted } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Redacted, Array as Arr } from "effect";
 import { retryOnSessionExpired } from "../src/combinators/retryOnSessionExpired.ts";
 import { OdooAuthenticationError } from "../src/errors/auth.ts";
 import { SessionExpiredError } from "../src/errors/session.ts";
@@ -69,7 +69,7 @@ const options = {
 const failTag = <A, E>(exit: Exit.Exit<A, E>): string | undefined =>
   Exit.isFailure(exit)
     ? Option.getOrUndefined(
-        Option.map(Cause.failureOption(exit.cause), (e) => (e as { _tag: string })._tag),
+        Option.map(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))), (e) => (e as { _tag: string })._tag),
       )
     : undefined;
 
@@ -149,14 +149,15 @@ describe("CookieSession.fromExisting", () => {
       // Simulate a call that hit code 100: the combinator invalidates and
       // re-logins. With no credentials and no renew, the relogin fails fast
       // with SessionExpiredError, which must propagate to the caller.
-      const call = Effect.zipRight(
-        session.login,
-        session.client
-          .execute(HttpClientRequest.post("https://erp.example.com/web/dataset/call_kw"))
-          .pipe(
-            Effect.orDie,
-            Effect.zipRight(Effect.fail(new SessionExpiredError({ message: "Session expired" }))),
-          ),
+      const call = session.login.pipe(
+        Effect.andThen(
+          session.client
+            .execute(HttpClientRequest.post("https://erp.example.com/web/dataset/call_kw"))
+            .pipe(
+              Effect.orDie,
+              Effect.andThen(Effect.fail(new SessionExpiredError({ message: "Session expired" }))),
+            ),
+        ),
       );
       const exit = yield* Effect.exit(retryOnSessionExpired(call, session));
       assert.strictEqual(failTag(exit), "SessionExpiredError");
@@ -205,7 +206,7 @@ describe("CookieSession.fromExisting", () => {
       const exit = yield* Effect.exit(session.login);
       assert.strictEqual(failTag(exit), "OdooAuthenticationError");
       if (Exit.isFailure(exit)) {
-        const err = Option.getOrThrow(Cause.failureOption(exit.cause));
+        const err = Option.getOrThrow(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))));
         assert.instanceOf(err, OdooAuthenticationError);
         assert.notInclude(err.message, "bad;value");
       }

@@ -17,7 +17,7 @@ import { apiKeyConfig, hasStack, majorVersion, TIMEOUT_MS } from "./support.ts";
  */
 const versionProbe = () =>
   JsonRpcTransport.makeVersion(apiKeyConfig()).pipe(
-    Effect.provide(NodeHttpClient.layer),
+    Effect.provide(NodeHttpClient.layerUndici),
     Effect.catchTags({
       OdooAuthenticationError: (e) => Effect.die(e),
       SessionExpiredError: (e) => Effect.die(e),

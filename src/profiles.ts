@@ -75,7 +75,7 @@ export class ProfileSecretMissingError extends Data.TaggedError("ProfileSecretMi
  * browser, a `Ref`-backed map in tests. Secrets cross this boundary only as
  * `Redacted` — never a bare string — so they cannot leak into logs or JSON.
  */
-export class SecretStore extends Context.Tag("odoo-rpc-ts/SecretStore")<
+export class SecretStore extends Context.Service<
   SecretStore,
   {
     readonly get: (
@@ -87,14 +87,14 @@ export class SecretStore extends Context.Tag("odoo-rpc-ts/SecretStore")<
     ) => Effect.Effect<void, ProfileStoreError>;
     readonly remove: (account: string) => Effect.Effect<void, ProfileStoreError>;
   }
->() {}
+>()("odoo-rpc-ts/SecretStore") {}
 
 /**
  * Consumer-implemented store for the secret-free {@link ProfileData} map, keyed
  * by profile name. A JSON file on disk, `localStorage`, a config table — anything
  * that round-trips a `Record<string, ProfileData>`. Never carries secrets.
  */
-export class ProfileStorage extends Context.Tag("odoo-rpc-ts/ProfileStorage")<
+export class ProfileStorage extends Context.Service<
   ProfileStorage,
   {
     readonly load: () => Effect.Effect<Record<string, ProfileData>, ProfileStoreError>;
@@ -102,7 +102,7 @@ export class ProfileStorage extends Context.Tag("odoo-rpc-ts/ProfileStorage")<
       profiles: Record<string, ProfileData>,
     ) => Effect.Effect<void, ProfileStoreError>;
   }
->() {}
+>()("odoo-rpc-ts/ProfileStorage") {}
 
 /** The keyring account for a profile's secret. One secret per (name, kind). */
 const accountOf = (name: string, credentialKind: ProfileData["credentialKind"]): string =>
@@ -158,7 +158,7 @@ export type LoadedProfile =
  * `SecretStore` as `Redacted`. Serializing what this service persists can never
  * expose secret material.
  */
-export class Profiles extends Context.Tag("odoo-rpc-ts/Profiles")<
+export class Profiles extends Context.Service<
   Profiles,
   {
     /**
@@ -208,7 +208,7 @@ export class Profiles extends Context.Tag("odoo-rpc-ts/Profiles")<
      */
     readonly removeProfile: (name: string) => Effect.Effect<void, ProfileStoreError>;
   }
->() {}
+>()("odoo-rpc-ts/Profiles") {}
 
 /** Hand-written {@link Profiles} layer over the two storage seams. */
 export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> = Layer.effect(
@@ -360,7 +360,7 @@ export const InMemorySecretStore = {
     Effect.gen(function* () {
       const store = yield* Ref.make<Record<string, Redacted.Redacted<string>>>({});
       return {
-        get: (account) => Ref.get(store).pipe(Effect.map((s) => Option.fromNullable(s[account]))),
+        get: (account) => Ref.get(store).pipe(Effect.map((s) => Option.fromNullishOr(s[account]))),
         set: (account, secret) => Ref.update(store, (s) => ({ ...s, [account]: secret })),
         remove: (account) => Ref.update(store, ({ [account]: _removed, ...rest }) => rest),
       };

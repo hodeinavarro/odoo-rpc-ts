@@ -25,7 +25,7 @@ import {
 
 /** OdooClient + Rpc over the JSON-RPC transport, on a real Node HttpClient. */
 const appLayer = (config = apiKeyConfig()): Layer.Layer<OdooClient | Rpc> => {
-  const transport = JsonRpcTransport.layer(config).pipe(Layer.provide(NodeHttpClient.layer));
+  const transport = JsonRpcTransport.layer(config).pipe(Layer.provide(NodeHttpClient.layerUndici));
   const rpc = RpcLive.layer.pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));
 };
@@ -38,7 +38,7 @@ describe.skipIf(!hasStack)("jsonrpc (live)", () => {
         const res = yield* JsonRpcTransport.makeVersion(apiKeyConfig());
         const parsed = parseVersionInfo(res.server_version_info);
         assert.strictEqual(parsed.major, majorVersion);
-      }).pipe(Effect.provide(NodeHttpClient.layer)),
+      }).pipe(Effect.provide(NodeHttpClient.layerUndici)),
     TIMEOUT_MS,
   );
 

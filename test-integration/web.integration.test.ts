@@ -4,7 +4,7 @@
  */
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Option, Redacted, Ref } from "effect";
-import { Cookies } from "@effect/platform";
+import { Cookies } from "effect/unstable/http";
 import { NodeHttpClient } from "@effect/platform-node";
 import {
   CookieSession,
@@ -19,7 +19,7 @@ import { badPasswordConfig, hasStack, marker, passwordConfig, TIMEOUT_MS } from 
 
 /** Just the cookie session (login-only specs). */
 const sessionLayer = (config = passwordConfig()): Layer.Layer<CookieSession> =>
-  CookieSessionLive.layer(config).pipe(Layer.provide(NodeHttpClient.layer));
+  CookieSessionLive.layer(config).pipe(Layer.provide(NodeHttpClient.layerUndici));
 
 /** OdooClient + CookieSession over the web transport, on a real Node HttpClient. */
 const appLayer = (config = passwordConfig()): Layer.Layer<OdooClient | CookieSession> => {
@@ -36,7 +36,7 @@ const existingAppLayer = (sessionId: string): Layer.Layer<OdooClient | CookieSes
   const session = CookieSessionLive.layerFromExisting({
     url,
     sessionId: Redacted.make(sessionId),
-  }).pipe(Layer.provide(NodeHttpClient.layer));
+  }).pipe(Layer.provide(NodeHttpClient.layerUndici));
   const transport = WebTransport.layer({ url }).pipe(Layer.provideMerge(session));
   const rpc = RpcLive.layer.pipe(Layer.provideMerge(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc)) as Layer.Layer<

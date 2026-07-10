@@ -24,7 +24,7 @@ const seededDb = (): string => process.env["ODOO_DB"] ?? "";
 const HEAVY_TIMEOUT_MS = 300_000;
 
 const withHttp = <A, E>(effect: Effect.Effect<A, E, HttpClient.HttpClient>) =>
-  effect.pipe(Effect.provide(NodeHttpClient.layer));
+  effect.pipe(Effect.provide(NodeHttpClient.layerUndici));
 
 describe.skipIf(!hasStack)("db (live)", () => {
   it.live.skipIf(!hasStack)(

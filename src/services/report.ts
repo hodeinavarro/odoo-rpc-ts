@@ -1,4 +1,4 @@
-import { Effect, Either, Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 import { OdooAccessError, OdooMissingError } from "../errors/server.ts";
 import { SchemaDriftError } from "../errors/schema.ts";
 import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
@@ -58,7 +58,7 @@ export const list = (
       kwargs: {},
     });
 
-    const rows = yield* Schema.decodeUnknown(Schema.Array(ReportActionSchema))(result).pipe(
+    const rows = yield* Schema.decodeUnknownEffect(Schema.Array(ReportActionSchema))(result).pipe(
       Effect.mapError(
         (cause) =>
           new SchemaDriftError({ context: "ir.actions.report rows", payload: result, cause }),
@@ -134,11 +134,14 @@ export const download = (
       return yield* Effect.fail(
         new OdooTransportError({
           request,
-          cause: new HttpClientError.ResponseError({
-            request: response.request,
-            response,
-            reason: "StatusCode",
-            description: `unexpected status ${response.status} downloading report ${options.reportName}`,
+          // v4 wraps the concrete reason (StatusCodeError) in the
+          // HttpClientError carrier class.
+          cause: new HttpClientError.HttpClientError({
+            reason: new HttpClientError.StatusCodeError({
+              request: response.request,
+              response,
+              description: `unexpected status ${response.status} downloading report ${options.reportName}`,
+            }),
           }),
         }),
       );
@@ -153,13 +156,13 @@ export const download = (
       // Manufacture a real ParseError so SchemaDriftError.cause is honest: a 2xx
       // body that is not a PDF (e.g. an HTML error page served with status 200).
       const header = new TextDecoder().decode(bytes.subarray(0, PDF_MAGIC.length));
-      const parsed = Schema.decodeUnknownEither(Schema.Literal("%PDF"))(header);
-      if (Either.isLeft(parsed)) {
+      const parsed = Schema.decodeUnknownResult(Schema.Literal("%PDF"))(header);
+      if (Result.isFailure(parsed)) {
         return yield* Effect.fail(
           new SchemaDriftError({
             context: `report/pdf/${options.reportName}`,
             payload: `non-PDF body (${bytes.length} bytes, status ${response.status})`,
-            cause: parsed.left,
+            cause: parsed.failure,
           }),
         );
       }

@@ -1,8 +1,16 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, Option, Redacted } from "effect";
+import { Deferred, Effect, Fiber, Layer, Option, Redacted, Exit } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "../src/internal/platform.ts";
 import { make } from "../src/session/cookie.ts";
+
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
 
 // ---------------------------------------------------------------------------
 // A scripted HttpClient: each entry is consumed in order and its cookie header
@@ -81,8 +89,8 @@ describe("CookieSession", () => {
         Effect.provide(Layer.succeed(HttpClient.HttpClient, gated)),
       );
 
-      const inFlight = yield* Effect.fork(session.login);
-      yield* Effect.yieldNow();
+      const inFlight = yield* Effect.forkChild(session.login);
+      yield* Effect.yieldNow;
 
       // Invalidate mid-login, then let the login finish.
       yield* session.invalidate;
@@ -131,10 +139,11 @@ describe("CookieSession", () => {
 
       const exit = yield* Effect.exit(session.login);
       assert.strictEqual(exit._tag, "Failure");
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "OdooAuthenticationError");
-        if (exit.cause.error._tag === "OdooAuthenticationError") {
-          assert.strictEqual(exit.cause.error.reason, "mfa-pending");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "OdooAuthenticationError");
+        if (err._tag === "OdooAuthenticationError") {
+          assert.strictEqual(err.reason, "mfa-pending");
         }
       }
     }),

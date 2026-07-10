@@ -1,10 +1,18 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Exit, Layer, Ref, Schema } from "effect";
+import { Effect, Exit, Layer, Ref, Schema, SchemaTransformation } from "effect";
 import { layer as clientLayer, OdooClient } from "../src/client.ts";
 import { SchemaDriftError } from "../src/errors/schema.ts";
 import { OdooServerError } from "../src/errors/server.ts";
 import { layer as rpcLayer } from "../src/rpc.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
+
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
 
 const handlers: FakeTransport.FakeHandlers = {
   "res.partner": {
@@ -54,13 +62,14 @@ describe("OdooClient ops", () => {
       // decoding — only possible when the schema may transform (Schema<A, I>).
       const Row = Schema.Struct({
         id: Schema.Number,
-        email: Schema.transform(
-          Schema.Union(Schema.String, Schema.Literal(false)),
-          Schema.NullOr(Schema.String),
-          {
-            decode: (raw) => (raw === false ? null : raw),
-            encode: (email) => email ?? (false as const),
-          },
+        email: Schema.Union([Schema.String, Schema.Literal(false)]).pipe(
+          Schema.decodeTo(
+            Schema.NullOr(Schema.String),
+            SchemaTransformation.transform({
+              decode: (raw: string | false) => (raw === false ? null : raw),
+              encode: (email: string | null) => email ?? (false as const),
+            }),
+          ),
         ),
       });
       const fake = FakeTransport.make({
@@ -501,8 +510,9 @@ describe("OdooClient ops", () => {
       );
 
       assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isFailure(exit) && exit.cause._tag === "Fail") {
-        const error = exit.cause.error;
+      const err = firstError(exit);
+      if (err !== undefined) {
+        const error = err;
         assert.isTrue(error instanceof SchemaDriftError);
         if (error instanceof SchemaDriftError) {
           assert.strictEqual(error.context, "res.partner.search_read");

@@ -3,7 +3,7 @@ import { Schema } from "effect";
 /**
  * Fields shared by every Odoo server fault. These are wire-decoded (the fault
  * payload is normalized at each transport's choke point), so the classes use
- * `Schema.TaggedError` rather than `Data.TaggedError`.
+ * `Schema.TaggedErrorClass` rather than `Data.TaggedError`.
  *
  * - `name` — the raw Python exception name (e.g. `odoo.exceptions.AccessError`),
  *   preserved verbatim so nothing is lost even on the fallback path.
@@ -17,7 +17,7 @@ export const serverFaultFields = {
   name: Schema.String,
   message: Schema.String,
   arguments: Schema.Array(Schema.Unknown),
-  context: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+  context: Schema.Record(Schema.String, Schema.Unknown),
   debug: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
   method: Schema.optional(Schema.String),
@@ -28,31 +28,31 @@ export const serverFaultFields = {
  * specific subtype. The raw `name` is preserved so callers can still branch on
  * it, and no information is discarded.
  */
-export class OdooServerError extends Schema.TaggedError<OdooServerError>()(
+export class OdooServerError extends Schema.TaggedErrorClass<OdooServerError>()(
   "OdooServerError",
   serverFaultFields,
 ) {}
 
 /** `odoo.exceptions.AccessError` / `AccessDenied` — permission denied. */
-export class OdooAccessError extends Schema.TaggedError<OdooAccessError>()(
+export class OdooAccessError extends Schema.TaggedErrorClass<OdooAccessError>()(
   "OdooAccessError",
   serverFaultFields,
 ) {}
 
 /** `odoo.exceptions.ValidationError` — a constraint/validation was violated. */
-export class OdooValidationError extends Schema.TaggedError<OdooValidationError>()(
+export class OdooValidationError extends Schema.TaggedErrorClass<OdooValidationError>()(
   "OdooValidationError",
   serverFaultFields,
 ) {}
 
 /** `odoo.exceptions.MissingError` — a referenced record no longer exists. */
-export class OdooMissingError extends Schema.TaggedError<OdooMissingError>()(
+export class OdooMissingError extends Schema.TaggedErrorClass<OdooMissingError>()(
   "OdooMissingError",
   serverFaultFields,
 ) {}
 
 /** `odoo.exceptions.UserError` — a deliberate, user-facing business error. */
-export class OdooUserError extends Schema.TaggedError<OdooUserError>()(
+export class OdooUserError extends Schema.TaggedErrorClass<OdooUserError>()(
   "OdooUserError",
   serverFaultFields,
 ) {}
@@ -61,7 +61,7 @@ export class OdooUserError extends Schema.TaggedError<OdooUserError>()(
  * `odoo.exceptions.LockError` — concurrent-update / serialization lock failure
  * (surfaced as a distinct exception on Odoo 19+).
  */
-export class OdooLockError extends Schema.TaggedError<OdooLockError>()(
+export class OdooLockError extends Schema.TaggedErrorClass<OdooLockError>()(
   "OdooLockError",
   serverFaultFields,
 ) {}

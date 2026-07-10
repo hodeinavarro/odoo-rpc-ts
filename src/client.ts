@@ -21,20 +21,20 @@ export type OdooRecord = { readonly [field: string]: unknown };
 /** `fields_get` metadata: field name → its attribute dict. */
 export type FieldsMetadata = { readonly [field: string]: OdooRecord };
 
-const UnknownRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 const RecordArray = Schema.Array(UnknownRecord);
 const IdArray = Schema.Array(Schema.Number);
-const FieldsGetResult = Schema.Record({ key: Schema.String, value: UnknownRecord });
+const FieldsGetResult = Schema.Record(Schema.String, UnknownRecord);
 const TrueLiteral = Schema.Literal(true);
 /** A `(id, display_name)` pair, as returned by `name_search`/`name_get`. */
-const NamePair = Schema.Tuple(Schema.Number, Schema.String);
+const NamePair = Schema.Tuple([Schema.Number, Schema.String]);
 const NamePairArray = Schema.Array(NamePair);
 /** `check_object_reference` → `(model, res_id)`; `res_id` is `false` when the
  * xml_id resolves but is not visible to the caller. */
-const ObjectReference = Schema.Tuple(
+const ObjectReference = Schema.Tuple([
   Schema.String,
-  Schema.Union(Schema.Number, Schema.Literal(false)),
-);
+  Schema.Union([Schema.Number, Schema.Literal(false)]),
+]);
 
 /** Options for {@link OdooClient.call} — the undecoded model-method escape hatch. */
 export interface CallOptions {
@@ -98,9 +98,9 @@ export interface TypedReadOptions {
 
 /** `web_search_read` returns `{ length, records }`, not a bare list. */
 const WebSearchReadResult = <A, I>(
-  row: Schema.Schema<A, I>,
-): Schema.Schema<{ readonly length: number; readonly records: ReadonlyArray<A> }, unknown> =>
-  Schema.Struct({ length: Schema.Number, records: Schema.Array(row) }) as unknown as Schema.Schema<
+  row: Schema.Codec<A, I>,
+): Schema.Codec<{ readonly length: number; readonly records: ReadonlyArray<A> }, unknown> =>
+  Schema.Struct({ length: Schema.Number, records: Schema.Array(row) }) as unknown as Schema.Codec<
     { readonly length: number; readonly records: ReadonlyArray<A> },
     unknown
   >;
@@ -117,9 +117,9 @@ const compact = (obj: Record<string, unknown>): Record<string, unknown> => {
 };
 
 const decode =
-  <A, I>(schema: Schema.Schema<A, I>, context: string) =>
+  <A, I>(schema: Schema.Codec<A, I>, context: string) =>
   (raw: unknown): Effect.Effect<A, SchemaDriftError> =>
-    Schema.decodeUnknown(schema)(raw).pipe(
+    Schema.decodeUnknownEffect(schema)(raw).pipe(
       Effect.mapError((cause) => new SchemaDriftError({ context, payload: raw, cause })),
     );
 
@@ -128,7 +128,7 @@ const decode =
  * Every result is decoded through `effect/Schema`; a wire-shape mismatch fails
  * with {@link SchemaDriftError} carrying the raw payload, never a silent cast.
  */
-export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
+export class OdooClient extends Context.Service<
   OdooClient,
   {
     /**
@@ -138,7 +138,7 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
     readonly searchRead: <A = OdooRecord, I = A>(
       model: string,
       options?: SearchReadOptions,
-      schema?: Schema.Schema<A, I>,
+      schema?: Schema.Codec<A, I>,
     ) => Effect.Effect<ReadonlyArray<A>, TransportCallError>;
 
     /**
@@ -153,7 +153,7 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
     readonly searchRecordsTyped: <A extends HasId, I = A>(
       model: string,
       options: SearchReadOptions | undefined,
-      schema: Schema.Schema<A, I>,
+      schema: Schema.Codec<A, I>,
     ) => Effect.Effect<TypedRecordSet<A>, TransportCallError>;
 
     /**
@@ -309,7 +309,7 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
       ids: ReadonlyArray<number>,
     ) => Effect.Effect<ReadonlyArray<readonly [number, string]>, TransportCallError>;
   }
->() {}
+>()("odoo-rpc-ts/OdooClient") {}
 
 /** The {@link OdooClient} layer over an {@link Rpc} service. */
 export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
@@ -323,11 +323,11 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
     const searchRead = <A = OdooRecord, I = A>(
       model: string,
       options?: SearchReadOptions,
-      schema?: Schema.Schema<A, I>,
+      schema?: Schema.Codec<A, I>,
     ): Effect.Effect<ReadonlyArray<A>, TransportCallError> => {
       // Rows decode FROM the wire shape (I) TO the domain shape (A), so
       // transforming schemas (DateFromString, false->null, ...) are first-class.
-      const rowSchema = (schema ?? UnknownRecord) as Schema.Schema<A, I>;
+      const rowSchema = (schema ?? UnknownRecord) as Schema.Codec<A, I>;
       const kwargs = compact({
         domain: normalizeDomain(options?.domain ?? []),
         fields: options?.fields,
@@ -343,7 +343,7 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
     const searchRecordsTyped = <A extends HasId, I = A>(
       model: string,
       options: SearchReadOptions | undefined,
-      schema: Schema.Schema<A, I>,
+      schema: Schema.Codec<A, I>,
     ): Effect.Effect<TypedRecordSet<A>, TransportCallError> =>
       // Reuse the search_read decode plumbing, then wrap the decoded rows in a
       // snapshot bound to this Rpc seam so fetchRelated can batch a co-model read.

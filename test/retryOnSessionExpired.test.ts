@@ -1,11 +1,19 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
+import { Effect, Layer, Redacted, Exit } from "effect";
 import { retryOnSessionExpired } from "../src/combinators/retryOnSessionExpired.ts";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientResponse } from "../src/internal/platform.ts";
 import { CookieSession, layer as cookieLayer } from "../src/session/cookie.ts";
 import { Transport } from "../src/transport.ts";
 import { layer as webLayer } from "../src/transports/web.ts";
+
+// v4 Cause is a flat failure list; recover the single typed error the way the
+// v3 `cause._tag === "Fail" ? cause.error` narrow did.
+const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  exit._tag === "Failure"
+    ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
+    : undefined;
+
 
 interface Canned {
   readonly body: unknown;
@@ -84,8 +92,9 @@ describe("retryOnSessionExpired", () => {
     Effect.gen(function* () {
       const exit = yield* Effect.exit(call);
       assert.strictEqual(exit._tag, "Failure");
-      if (exit._tag === "Failure" && exit.cause._tag === "Fail") {
-        assert.strictEqual(exit.cause.error._tag, "SessionExpiredError");
+      const err = firstError(exit);
+      if (err !== undefined) {
+        assert.strictEqual(err._tag, "SessionExpiredError");
       }
     }).pipe(
       Effect.provide(

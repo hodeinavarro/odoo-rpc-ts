@@ -14,9 +14,8 @@ describe("version-live.make", () => {
   it.effect("single-flights the probe: resolve twice, probe runs once", () =>
     Effect.gen(function* () {
       const probes = yield* Ref.make(0);
-      const probe = Effect.zipRight(
-        Ref.update(probes, (n) => n + 1),
-        Effect.succeed(commonResponse([19, 0, 0, "final", 0])),
+      const probe = Ref.update(probes, (n) => n + 1).pipe(
+        Effect.andThen(Effect.succeed(commonResponse([19, 0, 0, "final", 0]))),
       );
 
       const resolver = yield* VersionLive.make(probe);
