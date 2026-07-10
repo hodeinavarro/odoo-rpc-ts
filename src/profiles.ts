@@ -217,6 +217,27 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
     const secrets = yield* SecretStore;
     const storage = yield* ProfileStorage;
 
+    /**
+     * Overwriting a profile with a DIFFERENT credentialKind must evict the
+     * superseded secret first, or it is orphaned in the keyring forever:
+     * removeProfile derives the account from the *current* metadata kind, so a
+     * password secret left behind by a password→session switch would be
+     * invisible and un-removable. Evict-before-write keeps the failure modes
+     * benign: if the subsequent new-secret write fails, the stored metadata
+     * still names the OLD kind whose secret is now gone — loadProfile then
+     * reports ProfileSecretMissingError rather than returning stale material.
+     */
+    const evictSuperseded = (
+      name: string,
+      newKind: ProfileData["credentialKind"],
+      existing: Record<string, ProfileData>,
+    ): Effect.Effect<void, ProfileStoreError> => {
+      const previous = existing[name];
+      return previous !== undefined && previous.credentialKind !== newKind
+        ? secrets.remove(accountOf(name, previous.credentialKind))
+        : Effect.void;
+    };
+
     const saveProfile = (
       name: string,
       config: OdooConfig,
@@ -231,10 +252,11 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
           credentialKind,
           protocol,
         };
+        const existing = yield* storage.load();
+        yield* evictSuperseded(name, credentialKind, existing);
         // Secret before metadata: if metadata landed first and the secret write
         // then failed, we'd persist a profile that can never be loaded.
         yield* secrets.set(accountOf(name, credentialKind), secretOf(config.credentials));
-        const existing = yield* storage.load();
         yield* storage.save({ ...existing, [name]: data });
       });
 
@@ -245,9 +267,10 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
     ): Effect.Effect<void, ProfileStoreError> =>
       Effect.gen(function* () {
         const data: ProfileData = { url: url.href, credentialKind: "session", protocol: "web" };
+        const existing = yield* storage.load();
+        yield* evictSuperseded(name, "session", existing);
         // Same ordering as saveProfile: secret (the cookie) before metadata.
         yield* secrets.set(accountOf(name, "session"), sessionId);
-        const existing = yield* storage.load();
         yield* storage.save({ ...existing, [name]: data });
       });
 
@@ -261,6 +284,23 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
           // No metadata ⇒ no reachable secret either.
           return yield* new ProfileSecretMissingError({ name, account: name });
         }
+        // ProfileStorage is a consumer-supplied JSON round-trip — its output is
+        // NOT trusted. A corrupted/hand-edited record must fail in the typed
+        // channel (ProfileStoreError), never throw past it (new URL TypeError,
+        // or a credentials arm missing username/db sailing into OdooConfig).
+        const url = yield* Effect.try({
+          try: () => new URL(data.url),
+          catch: (cause) => new ProfileStoreError({ operation: "profile.decode", cause }),
+        });
+        if (
+          data.credentialKind !== "session" &&
+          (typeof data.username !== "string" || typeof data.db !== "string")
+        ) {
+          return yield* new ProfileStoreError({
+            operation: "profile.decode",
+            cause: `stored profile "${name}" (${data.credentialKind}) lacks username/db`,
+          });
+        }
         const account = accountOf(name, data.credentialKind);
         const maybeSecret = yield* secrets.get(account);
         if (Option.isNone(maybeSecret)) {
@@ -271,7 +311,7 @@ export const layer: Layer.Layer<Profiles, never, SecretStore | ProfileStorage> =
           // no credential; the consumer feeds this to CookieSessionLive.fromExisting.
           return {
             _tag: "session",
-            url: new URL(data.url),
+            url,
             sessionId: maybeSecret.value,
             protocol: data.protocol,
           } as const;

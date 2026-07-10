@@ -1,5 +1,5 @@
 /**
- * LIVE integration specs for typed records (candidate B — explicit traversal).
+ * LIVE integration specs for typed records (classic tier — explicit traversal).
  * Creates a scratch company + partners, reads them into a `TypedRecordSet` with
  * a schema declaring a nullable many2one (`company_id`) and a datetime
  * (`create_date` via `OdooDateTime`), then exercises the batched

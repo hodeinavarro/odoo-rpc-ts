@@ -290,3 +290,70 @@ const failingStorageForRemoval = (): Layer.Layer<ProfileStorage> =>
     save: () =>
       Effect.fail(new ProfileStoreError({ operation: "storage.save", cause: "disk full" })),
   });
+
+describe("Profiles — adversarial-review regressions", () => {
+  it.effect("cross-kind overwrite evicts the superseded secret (password → session)", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      const secrets = yield* SecretStore;
+      yield* profiles.saveProfile("prod", passwordConfig, "web");
+      // TOTP got enabled; the user switches this profile to the harvested-cookie flow.
+      yield* profiles.saveSessionProfile("prod", new URL("https://odoo.test/"), Redacted.make("cookie-v1"));
+      // The password secret must be GONE from the keyring, not orphaned.
+      const orphan = yield* secrets.get("prod:password");
+      assert.isTrue(Option.isNone(orphan));
+      const loaded = yield* profiles.loadProfile("prod");
+      assert.strictEqual(loaded._tag, "session");
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("cross-kind overwrite evicts the superseded secret (session → api-key)", () =>
+    Effect.gen(function* () {
+      const profiles = yield* Profiles;
+      const secrets = yield* SecretStore;
+      yield* profiles.saveSessionProfile("prod", new URL("https://odoo.test/"), Redacted.make("cookie-v1"));
+      yield* profiles.saveProfile("prod", apiKeyConfig, "json-rpc");
+      const orphan = yield* secrets.get("prod:session");
+      assert.isTrue(Option.isNone(orphan));
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("corrupted stored url fails typed (ProfileStoreError), never throws", () =>
+    Effect.gen(function* () {
+      const storage = yield* ProfileStorage;
+      const secrets = yield* SecretStore;
+      yield* secrets.set("bad:session", Redacted.make("cookie"));
+      yield* storage.save({
+        bad: { url: "::not a url::", credentialKind: "session", protocol: "web" } as ProfileData,
+      });
+      const profiles = yield* Profiles;
+      const exit = yield* Effect.exit(profiles.loadProfile("bad"));
+      assert.isTrue(Exit.isFailure(exit));
+      if (Exit.isFailure(exit)) {
+        const failure = exit.cause;
+        assert.include(JSON.stringify(failure), "profile.decode");
+      }
+    }).pipe(Effect.provide(inMemory)),
+  );
+
+  it.effect("credential record missing username/db fails typed, no fabricated config", () =>
+    Effect.gen(function* () {
+      const storage = yield* ProfileStorage;
+      const secrets = yield* SecretStore;
+      yield* secrets.set("mangled:password", Redacted.make("hunter2"));
+      yield* storage.save({
+        mangled: {
+          url: "https://odoo.test/",
+          credentialKind: "password",
+          protocol: "web",
+        } as ProfileData,
+      });
+      const profiles = yield* Profiles;
+      const exit = yield* Effect.exit(profiles.loadProfile("mangled"));
+      assert.isTrue(Exit.isFailure(exit));
+      if (Exit.isFailure(exit)) {
+        assert.include(JSON.stringify(exit.cause), "profile.decode");
+      }
+    }).pipe(Effect.provide(inMemory)),
+  );
+});
