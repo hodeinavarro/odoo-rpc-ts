@@ -1,5 +1,8 @@
 /**
- * Declared record models (candidate A — "declared prefetch"). A `RecordSpec`
+ * Declared record models — the SPEC tier of the records design ("declared
+ * prefetch" over the 17+ `specification` protocol; the classic tier in
+ * `typed.ts`/`related.ts` speaks the 16+ `[id, name]`-pair protocol instead).
+ * A `RecordSpec`
  * declares a model's field graph with `effect/Schema`: scalars decode directly,
  * relations declared with {@link Many2One}/{@link One2Many} carry a nested child
  * `RecordSpec`. From one declaration we derive BOTH:

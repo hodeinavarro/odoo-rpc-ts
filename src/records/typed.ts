@@ -1,7 +1,8 @@
 /**
  * `TypedRecordSet` — an immutable, decoded snapshot of rows bound to its
- * `(rpc, model)` origin, with explicit, batched relation traversal (candidate B
- * of the records design). Traversal is always ONE `read` per relation per
+ * `(rpc, model)` origin, with explicit, batched relation traversal — the
+ * CLASSIC tier of the records design (the classic `[id, name]`-pair protocol,
+ * works on 16+; the spec tier in `recordModel.ts` needs 17+). Traversal is always ONE `read` per relation per
  * recordset — never per row — so the N+1 storm is structurally impossible: there
  * is no per-record fetch API to misuse. The snapshot is never mutated; a fetch
  * produces a fresh {@link RelatedMap}, and the caller joins explicitly.

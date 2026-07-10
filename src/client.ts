@@ -146,7 +146,8 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
      * — an immutable snapshot bound to `(rpc, model)` with explicit, batched
      * relation traversal (`fetchRelated`/`joinRelated`). The schema MUST decode
      * an `id: number` on every row (`A extends { id: number }`); that id keys all
-     * downstream joins. This is the candidate-B ("explicit traversal") entry
+     * downstream joins. This is the classic-tier ("explicit traversal",
+     * `[id, name]`-pair protocol, works on 16+) entry
      * point — one `search_read` here, then one `read` per relation you traverse.
      */
     readonly searchRecordsTyped: <A extends HasId, I = A>(
@@ -156,7 +157,8 @@ export class OdooClient extends Context.Tag("odoo-rpc-ts/OdooClient")<
     ) => Effect.Effect<TypedRecordSet<A>, TransportCallError>;
 
     /**
-     * Declared-prefetch typed search (candidate A). Compiles `record`'s field
+     * Spec-tier typed search (declared prefetch, 17+ `specification`
+     * protocol). Compiles `record`'s field
      * graph into ONE `web_search_read` `specification` call and strict-decodes
      * the nested payload — a declared many2one comes back as a `{ id, ... }` dict
      * (or `null`), an x2many as a nested list — with NO per-relation round trip.
@@ -349,7 +351,7 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
         Effect.map((rows) => makeTypedRecordSet(rpc, model, rows)),
       );
 
-    // --- declared-prefetch typed reads (candidate A) ------------------------
+    // --- spec-tier typed reads (17+ `specification` protocol) ---------------
 
     type GateDecision =
       | { readonly _tag: "spec" }
@@ -415,7 +417,7 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
           `${model}.${method}: the web_read 'specification' protocol (declared-prefetch typed ` +
           `records) requires Odoo 17+, but the server is ${serverVersion}. For a relation-free ` +
           `read on 16 use searchTyped/readTyped (they degrade to search_read/read); for ` +
-          `relation traversal on 16 use searchRecordsTyped + fetchRelated (candidate B).`,
+          `relation traversal on 16 use searchRecordsTyped + fetchRelated (the classic tier).`,
       });
 
     const declaredFields = <A extends HasId, I>(record: RecordSpec<A, I>): ReadonlyArray<string> =>

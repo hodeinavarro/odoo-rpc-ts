@@ -1,5 +1,6 @@
 /**
- * FakeTransport suite for declared-prefetch typed reads (candidate A). Asserts
+ * FakeTransport suite for spec-tier typed reads (declared prefetch, 17+
+ * `specification` protocol). Asserts
  * the whole contract WITHOUT a network: exactly ONE `web_search_read` per
  * `searchTyped`, the exact compiled `specification` kwargs, nested decode
  * (many2one dict, `false` → null, empty x2many), drift when a classic `[id,name]`

@@ -1,7 +1,10 @@
 /**
- * Typed records — internal barrel. Candidate B ("explicit traversal") of the
- * records design: relation/temporal decode schemas, pure join helpers, and the
- * `TypedRecordSet` snapshot. Re-exported to the public surface via `src/index.ts`.
+ * Typed records — internal barrel for both per-protocol tiers of the records
+ * design: the CLASSIC tier (explicit traversal over the classic `[id, name]`
+ * pair protocol, 16+: relation/temporal decode schemas, pure join helpers,
+ * the `TypedRecordSet` snapshot) and the SPEC tier (declared prefetch over the
+ * 17+ `specification` protocol: `defineRecord` + the specification compiler).
+ * Re-exported to the public surface via `src/index.ts`.
  */
 export {
   Many2OneRef,
