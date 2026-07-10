@@ -43,7 +43,7 @@ export {
 export * as VersionResolverLive from "./version-live.ts";
 
 // The call_kw choke point (context merge) and the high-level client.
-export { Rpc, GlobalContext, type OdooContext } from "./rpc.ts";
+export { Rpc, GlobalContext, type OdooContext, type GlobalContextProvider } from "./rpc.ts";
 export * as RpcLive from "./rpc.ts";
 export {
   OdooClient,
@@ -51,6 +51,9 @@ export {
   type FieldsMetadata,
   type SearchOptions,
   type SearchReadOptions,
+  type CallOptions,
+  type ReadGroupOptions,
+  type NameSearchOptions,
 } from "./client.ts";
 export * as OdooClientLive from "./client.ts";
 
@@ -66,6 +69,35 @@ export {
   type CookieLoginError,
   type ExistingSessionOptions,
   type OdooSessionInfo,
+  type RawHttpOptions,
 } from "./session/cookie.ts";
 export * as CookieSessionLive from "./session/cookie.ts";
 export { retryOnSessionExpired } from "./combinators/retryOnSessionExpired.ts";
+
+// Typed x2many write commands.
+export {
+  Command,
+  type CommandTuple,
+  type X2ManyCommands,
+} from "./commands.ts";
+
+// Database administration (master-password gated; Node-oriented buffers).
+export * as DbService from "./services/db.ts";
+export type { CreateOptions, DuplicateOptions, RestoreOptions } from "./services/db.ts";
+
+// Report downloads over a cookie session.
+export { ReportService, type ReportAction, type DownloadOptions } from "./services/report.ts";
+
+// Named connection profiles — secrets never serialize; storage is yours.
+export {
+  Profiles,
+  SecretStore,
+  ProfileStorage,
+  InMemorySecretStore,
+  InMemoryProfileStorage,
+  ProfileStoreError,
+  ProfileSecretMissingError,
+  type ProfileData,
+  type ProfileProtocol,
+} from "./profiles.ts";
+export * as ProfilesLive from "./profiles.ts";

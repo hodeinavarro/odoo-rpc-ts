@@ -181,6 +181,19 @@ arguments, context, debug}`. Status map: 401 no/bad bearer, 403
   with `[]` (the ORM skips them); `write` is what raises `MissingError`.
   `res.partner.comment` is an Html field — the server wraps values in `<p>`,
   so integration round-trips use Char fields.
+- **More live-verified facts (2026-07-10):** `name_search`'s second parameter
+  was renamed `args` → `domain` in 19 — send it positionally over
+  execute_kw (version-proof), by name (`domain`) on JSON-2. `name_get` was
+  removed server-side in 17+ (document, don't polyfill). The report GET route
+  `/report/<converter>/<reportname>/<docids>` (`auth="user"`) is byte-identical
+  on 16–19 and CSRF-free (CSRF only guards http-POST) — cookie-session report
+  downloads work on every version. `service="db"` still dispatches over the
+  deprecated `/jsonrpc` on 19; `exp_restore` has NO neutralize param on any
+  version. An unknown report name 500s (not 404). `web_search_read`/`web_read`/
+  `web_save` accept a nested `specification` on **17+ only** (byte-identical
+  shape across 17/18/19: m2o → `{id, name}` dict or `false`, x2many → nested
+  list; 16 rejects the kwarg) and are plain model methods callable over every
+  transport. `res.users.groups_id` was renamed `group_ids` in 19.
 
 ## Version support matrix (16.0 – 19.0)
 
