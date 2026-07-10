@@ -238,15 +238,15 @@ describe("OdooClient ops", () => {
     }),
   );
 
-  it.effect("write targets ids on the seam with vals in kwargs", () =>
+  it.effect("write targets ids on the seam with vals positional (models rename the param)", () =>
     Effect.gen(function* () {
       const { log } = yield* withLog((_) =>
         OdooClient.pipe(Effect.flatMap((c) => c.write("res.partner", [1], { name: "X" }))),
       );
       assert.strictEqual(log[0]?.method, "write");
-      assert.deepStrictEqual(log[0]?.args, []);
+      assert.deepStrictEqual(log[0]?.args, [{ name: "X" }]);
       assert.deepStrictEqual(log[0]?.ids, [1]);
-      assert.deepStrictEqual(log[0]?.kwargs["vals"], { name: "X" });
+      assert.deepStrictEqual(log[0]?.kwargs, { context: {} });
     }),
   );
 

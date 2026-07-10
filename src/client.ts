@@ -563,7 +563,10 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
       values: OdooRecord,
     ): Effect.Effect<true, TransportCallError> =>
       rpc
-        .callKw(model, "write", [], { vals: values }, { ids })
+        // vals MUST be positional: models override write(self, <any param name>)
+        // (e.g. project.task uses a different name), so a `vals=` kwarg breaks
+        // on real instances. Verified live against Odoo 16 (2026-07-10).
+        .callKw(model, "write", [values], {}, { ids })
         .pipe(Effect.flatMap(decode(TrueLiteral, `${model}.write`)));
 
     const unlink = (

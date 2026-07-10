@@ -71,7 +71,7 @@ describe("Command passthrough via OdooClient.write", () => {
       assert.strictEqual(call.model, "sale.order");
       assert.strictEqual(call.method, "write");
       // The x2many triples must reach the transport byte-for-byte.
-      assert.deepStrictEqual(call.kwargs["vals"], {
+      assert.deepStrictEqual(call.args[0], {
         order_line: [
           [0, 0, { product_id: 42, product_uom_qty: 1 }],
           [1, 99, { price_unit: 10 }],
