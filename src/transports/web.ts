@@ -18,7 +18,12 @@ import { type CallKwParams, Transport, type TransportCallError } from "../transp
  * cookie session exists (via {@link CookieSession}) and then rides the shared,
  * cookie-bound HttpClient so `session_id` — and any rotation — is always sent.
  */
-export const make = (config: OdooConfig): Effect.Effect<Transport["Type"], never, CookieSession> =>
+export const make = (
+  // Only `url` is read: the transport never touches credentials, so an
+  // injected-cookie consumer (CookieSessionLive.fromExisting) can drive it
+  // without fabricating an OdooConfig. A full OdooConfig still satisfies this.
+  config: Pick<OdooConfig, "url">,
+): Effect.Effect<Transport["Type"], never, CookieSession> =>
   Effect.gen(function* () {
     const session = yield* CookieSession;
     const callUrl = joinPath(config.url, "web/dataset/call_kw");
@@ -82,7 +87,7 @@ export const make = (config: OdooConfig): Effect.Effect<Transport["Type"], never
   });
 
 /** Provide the web `Transport` from an already-resolved config. Requires `CookieSession`. */
-export const layer = (config: OdooConfig): Layer.Layer<Transport, never, CookieSession> =>
+export const layer = (config: Pick<OdooConfig, "url">): Layer.Layer<Transport, never, CookieSession> =>
   Layer.effect(Transport, make(config));
 
 /** Provide the web `Transport`, resolving `OdooConfig` from the environment. */
