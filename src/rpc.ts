@@ -28,17 +28,17 @@ const omitContext = (kwargs: OdooContext): OdooContext => {
  * Provided by the auth/transport layer that owns the session; absent here it
  * defaults to `{}`. It is read once, when the {@link Rpc} layer is built.
  */
-export class GlobalContext extends Context.Tag("odoo-rpc-ts/GlobalContext")<
+export class GlobalContext extends Context.Service<
   GlobalContext,
   OdooContext
->() {}
+>()("odoo-rpc-ts/GlobalContext") {}
 
 /**
  * The `call_kw` choke point. Every high-level operation funnels through here so
  * the Odoo `context` is merged in exactly one place, with a single, documented
  * precedence (see {@link callKw}).
  */
-export class Rpc extends Context.Tag("odoo-rpc-ts/Rpc")<
+export class Rpc extends Context.Service<
   Rpc,
   {
     /** The underlying transport's wire dialect, for ops that must branch on it. */
@@ -66,7 +66,7 @@ export class Rpc extends Context.Tag("odoo-rpc-ts/Rpc")<
       options?: { readonly context?: OdooContext; readonly ids?: ReadonlyArray<number> },
     ) => Effect.Effect<unknown, TransportCallError>;
   }
->() {}
+>()("odoo-rpc-ts/Rpc") {}
 
 /**
  * The provider seam for a lazily-seeded session/base context.
@@ -82,7 +82,7 @@ export class Rpc extends Context.Tag("odoo-rpc-ts/Rpc")<
  */
 export type GlobalContextProvider = Effect.Effect<OdooContext, TransportCallError>;
 
-const ContextRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown });
+const ContextRecord = Schema.Record(Schema.String, Schema.Unknown);
 
 /**
  * Decode a raw `res.users.context_get` result into an {@link OdooContext};
@@ -90,7 +90,7 @@ const ContextRecord = Schema.Record({ key: Schema.String, value: Schema.Unknown 
  * of {@link TransportCallError} and so propagates as the seeding call's error.
  */
 const decodeContext = (raw: unknown): Effect.Effect<OdooContext, SchemaDriftError> =>
-  Schema.decodeUnknown(ContextRecord)(raw).pipe(
+  Schema.decodeUnknownEffect(ContextRecord)(raw).pipe(
     Effect.mapError(
       (cause) => new SchemaDriftError({ context: "res.users.context_get", payload: raw, cause }),
     ),
@@ -102,10 +102,10 @@ const decodeContext = (raw: unknown): Effect.Effect<OdooContext, SchemaDriftErro
  * tag is always read (defaulting to `{}`) and sits at the very bottom.
  */
 const buildRpc = (
-  transport: Context.Tag.Service<Transport>,
+  transport: typeof Transport.Service,
   config: { readonly globalContext?: OdooContext } | undefined,
   provider: GlobalContextProvider | undefined,
-): Effect.Effect<Context.Tag.Service<Rpc>> =>
+): Effect.Effect<typeof Rpc.Service> =>
   Effect.gen(function* () {
     const staticBase = Option.getOrElse(
       yield* Effect.serviceOption(GlobalContext),

@@ -56,7 +56,7 @@ export interface TypedRecordSet<Row extends HasId> extends Iterable<Row> {
   readonly fetchRelated: <K extends Many2OneRefField<Row>, A extends HasId, I = A>(
     field: K,
     relatedModel: string,
-    schema: Schema.Schema<A, I>,
+    schema: Schema.Codec<A, I>,
     fields?: ReadonlyArray<string>,
   ) => Effect.Effect<RelatedMap<A>, TransportCallError>;
 
@@ -69,19 +69,19 @@ export interface TypedRecordSet<Row extends HasId> extends Iterable<Row> {
   readonly joinRelated: <K extends Many2OneRefField<Row>, A extends HasId, I = A>(
     field: K,
     relatedModel: string,
-    schema: Schema.Schema<A, I>,
+    schema: Schema.Codec<A, I>,
     fields?: ReadonlyArray<string>,
   ) => Effect.Effect<ReadonlyArray<readonly [Row, A | null]>, TransportCallError>;
 }
 
 /** The subset of the {@link Rpc} service {@link TypedRecordSet} depends on. */
-type RpcSeam = Pick<Rpc["Type"], "callKw">;
+type RpcSeam = Pick<typeof Rpc.Service, "callKw">;
 
 /** Boundary decode: a related-`read` payload that fails the caller schema is drift. */
 const decodeRows =
-  <A, I>(schema: Schema.Schema<A, I>, context: string) =>
+  <A, I>(schema: Schema.Codec<A, I>, context: string) =>
   (raw: unknown): Effect.Effect<ReadonlyArray<A>, SchemaDriftError> =>
-    Schema.decodeUnknown(Schema.Array(schema))(raw).pipe(
+    Schema.decodeUnknownEffect(Schema.Array(schema))(raw).pipe(
       Effect.mapError((cause) => new SchemaDriftError({ context, payload: raw, cause })),
     );
 
@@ -126,7 +126,7 @@ export const make = <Row extends HasId>(
   const fetchRelated = <K extends Many2OneRefField<Row>, A extends HasId, I = A>(
     field: K,
     relatedModel: string,
-    schema: Schema.Schema<A, I>,
+    schema: Schema.Codec<A, I>,
     fields?: ReadonlyArray<string>,
   ): Effect.Effect<RelatedMap<A>, TransportCallError> =>
     // Validate every row's field up front (dynamic-misuse guard), then collect
@@ -156,7 +156,7 @@ export const make = <Row extends HasId>(
   const joinRelated = <K extends Many2OneRefField<Row>, A extends HasId, I = A>(
     field: K,
     relatedModel: string,
-    schema: Schema.Schema<A, I>,
+    schema: Schema.Codec<A, I>,
     fields?: ReadonlyArray<string>,
   ): Effect.Effect<ReadonlyArray<readonly [Row, A | null]>, TransportCallError> =>
     fetchRelated(field, relatedModel, schema, fields).pipe(

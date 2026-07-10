@@ -39,8 +39,7 @@ export interface FakeTransport {
 
 const isEffect = (
   value: Effect.Effect<unknown, TransportCallError> | unknown,
-): value is Effect.Effect<unknown, TransportCallError> =>
-  typeof value === "object" && value !== null && Effect.EffectTypeId in value;
+): value is Effect.Effect<unknown, TransportCallError> => Effect.isEffect(value);
 
 /**
  * Build a deterministic, network-free {@link Transport} from scripted handlers.
@@ -54,7 +53,7 @@ export const make = (
   handlers: FakeHandlers,
   options?: { readonly dialect?: TransportDialect },
 ): FakeTransport => {
-  const callLog = Ref.unsafeMake<ReadonlyArray<CallKwParams>>([]);
+  const callLog = Ref.makeUnsafe<ReadonlyArray<CallKwParams>>([]);
 
   const layer = Layer.succeed(Transport, {
     dialect: options?.dialect ?? "execute-kw",

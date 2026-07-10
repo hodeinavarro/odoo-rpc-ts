@@ -1,4 +1,4 @@
-import { type ConfigError, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { type Config, Effect, Layer, Option, Redacted, Schema } from "effect";
 import { OdooConfig } from "../config.ts";
 import type { OdooConfig as OdooConfigType } from "../config.ts";
 import { OdooAuthenticationError } from "../errors/auth.ts";
@@ -49,7 +49,7 @@ const SerializeException = Schema.Struct({
   name: Schema.optional(Schema.String),
   message: Schema.optional(Schema.String),
   arguments: Schema.optional(Schema.Array(Schema.Unknown)),
-  context: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  context: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
   debug: Schema.optional(Schema.String),
 });
 type SerializeException = typeof SerializeException.Type;
@@ -116,7 +116,7 @@ const mapJson2Fault = (
     // A non-JSON or shape-drifted error body falls back to an empty exception,
     // which routes to status-based mapping below.
     const exc = yield* response.json.pipe(
-      Effect.flatMap(Schema.decodeUnknown(SerializeException)),
+      Effect.flatMap(Schema.decodeUnknownEffect(SerializeException)),
       Effect.orElseSucceed(() => emptyException),
     );
     const raw = rawFault(exc, status, site);
@@ -152,7 +152,7 @@ const mapJson2Fault = (
  */
 export const make = (
   config: OdooConfigType,
-): Effect.Effect<Transport["Type"], OdooAuthenticationError, HttpClient.HttpClient> =>
+): Effect.Effect<typeof Transport.Service, OdooAuthenticationError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     if (config.credentials._tag !== "ApiKey") {
       return yield* Effect.fail(
@@ -201,7 +201,7 @@ export const make = (
             "X-Odoo-Database": config.db,
             "Content-Type": "application/json",
           }),
-          HttpClientRequest.bodyUnsafeJson(body),
+          HttpClientRequest.bodyJsonUnsafe(body),
         );
 
         const response = yield* client
@@ -224,7 +224,7 @@ export const make = (
       );
     };
 
-    return Transport.of({ dialect: "json2", callKw });
+    return { dialect: "json2" as const, callKw };
   });
 
 /** The concrete subset of the transport failure channel JSON-2 produces. */
@@ -243,7 +243,7 @@ export const layer = (
 /** Wire a JSON-2 {@link Transport}, reading {@link OdooConfig} from the environment. */
 export const layerConfig: Layer.Layer<
   Transport,
-  OdooAuthenticationError | ConfigError.ConfigError,
+  OdooAuthenticationError | Config.ConfigError,
   HttpClient.HttpClient
 > = Layer.effect(Transport, Effect.flatMap(OdooConfig, make));
 
@@ -294,7 +294,7 @@ export const probeJson2Version = (
     }
 
     const payload = yield* response.json.pipe(Effect.mapError(toTransportError(info)));
-    const decoded = yield* Schema.decodeUnknown(Json2Version)(payload).pipe(
+    const decoded = yield* Schema.decodeUnknownEffect(Json2Version)(payload).pipe(
       Effect.mapError(
         (cause) => new SchemaDriftError({ context: "odoo.json2.version", payload, cause }),
       ),

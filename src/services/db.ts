@@ -75,7 +75,7 @@ const dbCall = (
 
     const request = HttpClientRequest.post(endpoint).pipe(
       HttpClientRequest.setHeader("Content-Type", "application/json"),
-      HttpClientRequest.bodyUnsafeJson(buildRequest({ service: "db", method, args }, id)),
+      HttpClientRequest.bodyJsonUnsafe(buildRequest({ service: "db", method, args }, id)),
     );
 
     const payload: unknown = yield* client.execute(request).pipe(
@@ -85,7 +85,7 @@ const dbCall = (
       ),
     );
 
-    const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(payload).pipe(
+    const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(payload).pipe(
       Effect.mapError(
         (cause) => new SchemaDriftError({ context: "odoo.db response", payload, cause }),
       ),
@@ -99,11 +99,11 @@ const dbCall = (
 
 /** Decode a `db` result through `schema`, raising {@link SchemaDriftError} on drift. */
 const decodeResult = <A, I>(
-  schema: Schema.Schema<A, I>,
+  schema: Schema.Codec<A, I>,
   context: string,
   result: unknown,
 ): Effect.Effect<A, SchemaDriftError> =>
-  Schema.decodeUnknown(schema)(result).pipe(
+  Schema.decodeUnknownEffect(schema)(result).pipe(
     Effect.mapError((cause) => new SchemaDriftError({ context, payload: result, cause })),
   );
 

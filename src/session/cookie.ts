@@ -1,4 +1,4 @@
-import { type ConfigError, Context, Effect, Layer, Option, Redacted, Ref, Schema } from "effect";
+import { type Config, Context, Effect, Layer, Option, Redacted, Ref, Schema } from "effect";
 import { OdooConfig } from "../config.ts";
 import { OdooAuthenticationError } from "../errors/auth.ts";
 import type { OdooServerFault } from "../errors/server.ts";
@@ -36,7 +36,7 @@ export const joinPath = (base: URL, path: string): string => {
  */
 const SessionInfoSchema = Schema.Struct({
   uid: Schema.NullOr(Schema.Number),
-  user_context: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown })),
+  user_context: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
   server_version_info: Schema.optional(Schema.Unknown),
 });
 
@@ -121,10 +121,10 @@ export interface CookieSessionService {
   readonly peek: Effect.Effect<Option.Option<OdooSessionInfo>>;
 }
 
-export class CookieSession extends Context.Tag("odoo-rpc-ts/CookieSession")<
+export class CookieSession extends Context.Service<
   CookieSession,
   CookieSessionService
->() {}
+>()("odoo-rpc-ts/CookieSession") {}
 
 /**
  * One session-info round trip: POST a JSON-RPC envelope, decode the response,
@@ -144,14 +144,14 @@ const sessionInfoRoundTrip = (
     const envelope = buildRequest(params, nextRequestId());
 
     const response = yield* client
-      .execute(HttpClientRequest.bodyUnsafeJson(HttpClientRequest.post(url), envelope))
+      .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(url), envelope))
       .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
 
     const body = yield* response.json.pipe(
       Effect.mapError((cause) => new OdooTransportError({ request, cause })),
     );
 
-    const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
+    const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(
       Effect.mapError(
         (cause) =>
           new SchemaDriftError({
@@ -166,7 +166,7 @@ const sessionInfoRoundTrip = (
       return yield* Effect.fail(mapJsonRpcError(decoded.error, { method }));
     }
 
-    const info = yield* Schema.decodeUnknown(SessionInfoSchema)(decoded.result).pipe(
+    const info = yield* Schema.decodeUnknownEffect(SessionInfoSchema)(decoded.result).pipe(
       Effect.mapError(
         (cause) =>
           new SchemaDriftError({
@@ -221,14 +221,14 @@ const makeRawHatches = (
       const envelope = buildRequest(params, nextRequestId());
 
       const response = yield* client
-        .execute(HttpClientRequest.bodyUnsafeJson(HttpClientRequest.post(url), envelope))
+        .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(url), envelope))
         .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
 
       const body = yield* response.json.pipe(
         Effect.mapError((cause) => new OdooTransportError({ request, cause })),
       );
 
-      const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
+      const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(
         Effect.mapError(
           (cause) => new SchemaDriftError({ context: `${path} envelope`, payload: body, cause }),
         ),
@@ -324,7 +324,7 @@ export const layer = (
 /** Provide `CookieSession`, resolving `OdooConfig` from the environment. */
 export const layerConfig: Layer.Layer<
   CookieSession,
-  ConfigError.ConfigError,
+  Config.ConfigError,
   HttpClient.HttpClient
 > = Layer.effect(CookieSession, Effect.flatMap(OdooConfig, make));
 

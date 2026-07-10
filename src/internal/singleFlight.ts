@@ -1,4 +1,4 @@
-import { Effect, Option, Ref } from "effect";
+import { Effect, Option, Ref, Semaphore } from "effect";
 
 /** A memoized `get` whose underlying `acquire` runs at most once on success. */
 export interface SingleFlight<A, E, R> {
@@ -37,7 +37,7 @@ export const make = <A, E, R>(
 ): Effect.Effect<SingleFlight<A, E, R>, never, never> =>
   Effect.gen(function* () {
     const ref = yield* Ref.make<State<A>>({ generation: 0, value: Option.none() });
-    const semaphore = yield* Effect.makeSemaphore(1);
+    const semaphore = yield* Semaphore.make(1);
 
     const get: Effect.Effect<A, E, R> = Effect.gen(function* () {
       // Fast path: already cached, no lock needed.

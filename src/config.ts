@@ -1,4 +1,4 @@
-import { Config, ConfigError, Either, type Redacted } from "effect";
+import { Config, Effect, Option, Schema, SchemaIssue, type Redacted } from "effect";
 
 /**
  * How the client authenticates. A tagged union so downstream auth layers
@@ -29,16 +29,26 @@ export interface OdooConfig {
 }
 
 /**
+ * A config validation failure on the offending raw value. v4's `ConfigError`
+ * wraps a `SchemaError` (data found but invalid) — the analogue of v3's
+ * `ConfigError.InvalidData`.
+ */
+const invalidData = (value: unknown, message: string): Config.ConfigError =>
+  new Config.ConfigError(
+    new Schema.SchemaError(new SchemaIssue.InvalidValue(Option.some(value), { message })),
+  );
+
+/**
  * Parse and validate the `ODOO_URL` value: must be a well-formed absolute URL,
  * and must be `https` unless it targets localhost / a loopback address. TLS is
  * never silently disabled.
  */
-const parseUrl = (raw: string): Either.Either<URL, ConfigError.ConfigError> => {
+const parseUrl = (raw: string): Effect.Effect<URL, Config.ConfigError> => {
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return Either.left(ConfigError.InvalidData(["URL"], `Not a valid URL: ${raw}`));
+    return Effect.fail(invalidData(raw, `Not a valid URL: ${raw}`));
   }
 
   const isLoopback =
@@ -48,12 +58,12 @@ const parseUrl = (raw: string): Either.Either<URL, ConfigError.ConfigError> => {
     url.hostname === "::1";
 
   if (url.protocol !== "https:" && !isLoopback) {
-    return Either.left(
-      ConfigError.InvalidData(["URL"], `Refusing non-https URL to a non-localhost host: ${raw}`),
+    return Effect.fail(
+      invalidData(raw, `Refusing non-https URL to a non-localhost host: ${raw}`),
     );
   }
 
-  return Either.right(url);
+  return Effect.succeed(url);
 };
 
 const urlConfig: Config.Config<URL> = Config.string("URL").pipe(Config.mapOrFail(parseUrl));

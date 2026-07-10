@@ -52,7 +52,7 @@ const resolveVersion = (response: VersionProbeResponse): ResolvedVersion => {
  */
 export const make = (
   probe: Effect.Effect<VersionProbeResponse, VersionProbeError>,
-): Effect.Effect<VersionResolver["Type"], never> =>
+): Effect.Effect<typeof VersionResolver.Service, never> =>
   Effect.gen(function* () {
     const cache = yield* SingleFlight.make(Effect.map(probe, resolveVersion));
     return { resolve: cache.get };

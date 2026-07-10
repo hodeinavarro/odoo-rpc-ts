@@ -1,4 +1,4 @@
-import { type ConfigError, Effect, Layer, Schema } from "effect";
+import { type Config, Effect, Layer, Schema } from "effect";
 import { OdooConfig } from "../config.ts";
 import { SchemaDriftError } from "../errors/schema.ts";
 import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
@@ -23,7 +23,7 @@ export const make = (
   // injected-cookie consumer (CookieSessionLive.fromExisting) can drive it
   // without fabricating an OdooConfig. A full OdooConfig still satisfies this.
   config: Pick<OdooConfig, "url">,
-): Effect.Effect<Transport["Type"], never, CookieSession> =>
+): Effect.Effect<typeof Transport.Service, never, CookieSession> =>
   Effect.gen(function* () {
     const session = yield* CookieSession;
     const callUrl = joinPath(config.url, "web/dataset/call_kw");
@@ -49,14 +49,14 @@ export const make = (
         );
 
         const response = yield* session.client
-          .execute(HttpClientRequest.bodyUnsafeJson(HttpClientRequest.post(callUrl), envelope))
+          .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(callUrl), envelope))
           .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
 
         const body = yield* response.json.pipe(
           Effect.mapError((cause) => new OdooTransportError({ request, cause })),
         );
 
-        const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
+        const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(
           Effect.mapError(
             (cause) =>
               new SchemaDriftError({
@@ -92,5 +92,5 @@ export const layer = (
 ): Layer.Layer<Transport, never, CookieSession> => Layer.effect(Transport, make(config));
 
 /** Provide the web `Transport`, resolving `OdooConfig` from the environment. */
-export const layerConfig: Layer.Layer<Transport, ConfigError.ConfigError, CookieSession> =
+export const layerConfig: Layer.Layer<Transport, Config.ConfigError, CookieSession> =
   Layer.effect(Transport, Effect.flatMap(OdooConfig, make));

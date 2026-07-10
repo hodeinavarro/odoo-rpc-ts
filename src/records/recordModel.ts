@@ -26,7 +26,7 @@
  * deliberately diverges from the Python design's `.value` recommendation, which
  * existed to model presence separately from the record; TS does not need it.
  */
-import { Schema } from "effect";
+import { Schema, SchemaTransformation } from "effect";
 import type { HasId } from "./typed.ts";
 
 /**
@@ -56,7 +56,7 @@ export type FieldMeta =
  */
 export interface RecordSpec<A extends HasId, I = A> {
   readonly model: string;
-  readonly schema: Schema.Schema<A, I>;
+  readonly schema: Schema.Codec<A, I>;
   readonly fields: Readonly<Record<string, FieldMeta>>;
   /** `true` iff at least one declared field is a many2one/one2many relation. */
   readonly hasRelations: boolean;
@@ -106,7 +106,7 @@ export const One2Many = <A extends HasId, I>(
  * recovered structurally by {@link FieldType}/{@link FieldEncoded} via `infer`.
  */
 export type FieldInput =
-  | Schema.Schema.Any
+  | Schema.Top
   // oxlint-disable-next-line no-explicit-any -- Schema invariance; see above.
   | Many2OneDecl<any, any>
   // oxlint-disable-next-line no-explicit-any -- Schema invariance; see above.
@@ -117,8 +117,8 @@ type FieldType<T> = T extends Many2OneDecl<infer A, infer _I>
   ? A | null
   : T extends One2ManyDecl<infer A, infer _I>
     ? ReadonlyArray<A>
-    : T extends Schema.Schema<infer A, infer _I, infer _R>
-      ? A
+    : T extends Schema.Top
+      ? T["Type"]
       : never;
 
 /** The wire (`Encoded`) value a declared field maps from. */
@@ -126,8 +126,8 @@ type FieldEncoded<T> = T extends Many2OneDecl<infer _A, infer I>
   ? I | false
   : T extends One2ManyDecl<infer _A, infer I>
     ? ReadonlyArray<I>
-    : T extends Schema.Schema<infer _A, infer I, infer _R>
-      ? I
+    : T extends Schema.Top
+      ? T["Encoded"]
       : never;
 
 /** The decoded row type of a declaration `F` — always carries `id: number`. */
@@ -153,15 +153,15 @@ const isRelationDecl = (
  * cast past.
  */
 // oxlint-disable-next-line no-explicit-any -- Schema invariance; see FieldInput.
-const many2oneFieldSchema = (child: RecordSpec<any, any>): Schema.Schema.Any =>
-  Schema.transform(
-    Schema.Union(child.schema, Schema.Literal(false)),
-    Schema.NullOr(Schema.typeSchema(child.schema)),
-    {
-      strict: true,
-      decode: (wire) => (wire === false ? null : wire),
-      encode: (value) => (value === null ? (false as const) : value),
-    },
+const many2oneFieldSchema = (child: RecordSpec<any, any>): Schema.Top =>
+  Schema.Union([child.schema, Schema.Literal(false)]).pipe(
+    Schema.decodeTo(
+      Schema.NullOr(Schema.toType(child.schema)),
+      SchemaTransformation.transform({
+        decode: (wire: unknown) => (wire === false ? null : wire),
+        encode: (value: unknown) => (value === null ? (false as const) : value),
+      }),
+    ),
   );
 
 /**
@@ -183,7 +183,7 @@ export const defineRecord = <F extends Record<string, FieldInput>>(
   model: string,
   fields: F,
 ): RecordSpec<RowType<F>, RowEncoded<F>> => {
-  const structFields: Record<string, Schema.Schema.Any> = { id: Schema.Number };
+  const structFields: Record<string, Schema.Top> = { id: Schema.Number };
   const meta: Record<string, FieldMeta> = { id: { kind: "scalar" } };
 
   for (const [name, decl] of Object.entries(fields)) {
@@ -204,7 +204,7 @@ export const defineRecord = <F extends Record<string, FieldInput>>(
   // The dynamic Struct build cannot preserve the precise mapped type; we recover
   // it via the RowType/RowEncoded projection, which is exactly what the loop
   // constructs field-for-field.
-  const schema = Schema.Struct(structFields) as unknown as Schema.Schema<RowType<F>, RowEncoded<F>>;
+  const schema = Schema.Struct(structFields) as unknown as Schema.Codec<RowType<F>, RowEncoded<F>>;
   const hasRelations = Object.values(meta).some((m) => m.kind !== "scalar");
 
   return { model, schema, fields: meta, hasRelations };

@@ -21,5 +21,5 @@ export const retryOnSessionExpired = <A, E, R>(
       error !== null &&
       "_tag" in error &&
       (error as { readonly _tag: unknown })._tag === "SessionExpiredError",
-    () => Effect.zipRight(Effect.zipRight(session.invalidate, session.login), effect),
+    () => session.invalidate.pipe(Effect.andThen(session.login), Effect.andThen(effect)),
   );
