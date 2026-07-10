@@ -5,7 +5,12 @@ import type { OdooServerFault } from "../errors/server.ts";
 import { SchemaDriftError } from "../errors/schema.ts";
 import { SessionExpiredError } from "../errors/session.ts";
 import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
-import { Cookies, HttpClient, HttpClientRequest } from "../internal/platform.ts";
+import {
+  Cookies,
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+} from "../internal/platform.ts";
 import * as SingleFlight from "../internal/singleFlight.ts";
 import {
   buildRequest,
@@ -64,9 +69,44 @@ export type CookieLoginError =
  * transport MUST reuse it so the login `Set-Cookie` (and any mid-session
  * rotation) is carried on every subsequent `call_kw`.
  */
+/**
+ * Options for {@link CookieSessionService.http}: a raw HTTP round trip on the
+ * cookie-bound client. `path` is joined onto the session's base url (a base
+ * mount like `/odoo` is preserved). `method` defaults to `GET`.
+ */
+export interface RawHttpOptions {
+  readonly path: string;
+  readonly method?: string;
+  readonly body?: Uint8Array;
+  readonly headers?: Record<string, string>;
+}
+
 export interface CookieSessionService {
   /** Ensure a login has run and return the live session. Single-flight. */
   readonly login: Effect.Effect<OdooSessionInfo, CookieLoginError>;
+  /**
+   * Raw JSON-RPC escape hatch: ensure login, then POST the shared JSON-RPC
+   * envelope (`{jsonrpc, method:"call", params, id}`) to an arbitrary `path`
+   * under the session's base url and return the raw `result` member. Server
+   * faults flow through the shared `mapJsonRpcError` choke point (code 100 →
+   * `SessionExpiredError`, etc.); a non-envelope body fails as `SchemaDriftError`.
+   * For calling models this is `web/dataset/call_kw` with the `{model, method,
+   * args, kwargs}` params shape.
+   */
+  readonly json: (
+    path: string,
+    params?: Record<string, unknown>,
+  ) => Effect.Effect<unknown, CookieLoginError>;
+  /**
+   * Raw HTTP escape hatch: ensure login, then issue a raw request on the
+   * cookie-bound client and return the response UNTOUCHED. The caller owns the
+   * response fully, including any non-2xx status — this hatch never inspects it
+   * and only fails (`OdooTransportError`) on a wire-level error or a failed
+   * login. Used for binary endpoints like `GET /report/<converter>/...`.
+   */
+  readonly http: (
+    options: RawHttpOptions,
+  ) => Effect.Effect<HttpClientResponse.HttpClientResponse, CookieLoginError>;
   /**
    * Drop the cached session and the (now-dead) `session_id` cookie so the next
    * `login` re-authenticates. Does NOT auto-relogin — that is the opt-in
@@ -158,6 +198,76 @@ const sessionInfoRoundTrip = (
     return session;
   });
 
+/**
+ * Build the two raw escape hatches (`json`, `http`) shared by {@link make} and
+ * {@link fromExisting}. Both close over the SAME cookie-bound `client`, base
+ * `url`, and single-flight `login` the rest of the service uses, so a hatch
+ * request rides the live `session_id` cookie exactly like a `call_kw` does.
+ */
+const makeRawHatches = (
+  client: HttpClient.HttpClient,
+  baseUrl: URL,
+  login: Effect.Effect<OdooSessionInfo, CookieLoginError>,
+): Pick<CookieSessionService, "json" | "http"> => {
+  const json = (
+    path: string,
+    params: Record<string, unknown> = {},
+  ): Effect.Effect<unknown, CookieLoginError> =>
+    Effect.gen(function* () {
+      yield* login;
+
+      const url = joinPath(baseUrl, path);
+      const request: RequestInfo = { method: "POST", url };
+      const envelope = buildRequest(params, nextRequestId());
+
+      const response = yield* client
+        .execute(HttpClientRequest.bodyUnsafeJson(HttpClientRequest.post(url), envelope))
+        .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+
+      const body = yield* response.json.pipe(
+        Effect.mapError((cause) => new OdooTransportError({ request, cause })),
+      );
+
+      const decoded = yield* Schema.decodeUnknown(JsonRpcResponse)(body).pipe(
+        Effect.mapError(
+          (cause) => new SchemaDriftError({ context: `${path} envelope`, payload: body, cause }),
+        ),
+      );
+
+      if ("error" in decoded) {
+        return yield* Effect.fail(mapJsonRpcError(decoded.error, { method: path }));
+      }
+
+      return decoded.result;
+    });
+
+  const http = (
+    options: RawHttpOptions,
+  ): Effect.Effect<HttpClientResponse.HttpClientResponse, CookieLoginError> =>
+    Effect.gen(function* () {
+      yield* login;
+
+      const url = joinPath(baseUrl, options.path);
+      const method = options.method ?? "GET";
+      const request: RequestInfo = { method, url };
+
+      let req = HttpClientRequest.make(method as Parameters<typeof HttpClientRequest.make>[0])(url);
+      if (options.headers !== undefined) {
+        req = HttpClientRequest.setHeaders(req, options.headers);
+      }
+      if (options.body !== undefined) {
+        req = HttpClientRequest.bodyUint8Array(req, options.body);
+      }
+
+      // Response returned untouched — the caller owns any non-2xx status.
+      return yield* client
+        .execute(req)
+        .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+    });
+
+  return { json, http };
+};
+
 export const make = (
   config: OdooConfig,
 ): Effect.Effect<CookieSessionService, never, HttpClient.HttpClient> =>
@@ -201,6 +311,7 @@ export const make = (
       cookies,
       client,
       peek: flight.peek,
+      ...makeRawHatches(client, config.url, flight.get),
     };
   });
 
@@ -339,6 +450,7 @@ export const fromExisting = (
       cookies,
       client,
       peek: flight.peek,
+      ...makeRawHatches(client, options.url, flight.get),
     };
   });
 
