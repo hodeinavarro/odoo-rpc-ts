@@ -48,6 +48,8 @@ services:
       ODOO_HARNESS_DB_PORT: "5432"
       ODOO_HARNESS_DB_USER: ${ODOO_HARNESS_DB_USER:-odoo}
       ODOO_HARNESS_DB_PASSWORD: ${ODOO_HARNESS_DB_PASSWORD:-odoo}
+      # Master password gating db-management ops; templated into odoo.conf.
+      ODOO_HARNESS_MASTER_PASSWORD: ${ODOO_HARNESS_MASTER_PASSWORD:-master}
     ports:
       # Host port keyed by major (8016/8017/8018/8019) → two versions coexist.
       - "${ODOO_HARNESS_PORT:-8016}:8069"

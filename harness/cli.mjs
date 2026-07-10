@@ -48,6 +48,9 @@ function ctx(version) {
     // db creds: defaults are fine for a disposable local harness.
     ODOO_HARNESS_DB_USER: process.env.ODOO_HARNESS_DB_USER ?? "odoo",
     ODOO_HARNESS_DB_PASSWORD: process.env.ODOO_HARNESS_DB_PASSWORD ?? "odoo",
+    // Master password gating db-management ops; templated into odoo.conf and
+    // recorded in the state file so the db integration suite can use it.
+    ODOO_HARNESS_MASTER_PASSWORD: process.env.ODOO_HARNESS_MASTER_PASSWORD ?? "master",
   };
   return { version, major, port, db, stateDir, stateFile, env };
 }
@@ -175,6 +178,8 @@ function up(version) {
         `ODOO_HARNESS_PORT=${c.port}`,
         "-e",
         `ODOO_HARNESS_VERSION=${version}`,
+        "-e",
+        `ODOO_HARNESS_MASTER_PASSWORD=${c.env.ODOO_HARNESS_MASTER_PASSWORD}`,
         "odoo",
         "odoo",
         "shell",

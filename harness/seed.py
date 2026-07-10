@@ -20,6 +20,9 @@ KEY_NAME = "odoo-rpc-ts integration"
 version = os.environ["ODOO_HARNESS_VERSION"]
 db = os.environ["ODOO_HARNESS_DB"]
 port = os.environ["ODOO_HARNESS_PORT"]
+# Master password gating db-management ops (templated into odoo.conf). Default
+# "master" mirrors the compose/cli default; recorded so the db suite can use it.
+master_password = os.environ.get("ODOO_HARNESS_MASTER_PASSWORD", "master")
 state_dir = os.environ.get("ODOO_HARNESS_STATE_DIR", "/harness-state")
 
 Users = env["res.users"].sudo()
@@ -88,6 +91,7 @@ lines = [
     "ODOO_USERNAME=rpc",
     f"ODOO_PASSWORD={PASSWORD}",
     f"ODOO_API_KEY={api_key}",
+    f"ODOO_MASTER_PASSWORD={master_password}",
     f"ODOO_HARNESS_VERSION={version}",
     "",
 ]

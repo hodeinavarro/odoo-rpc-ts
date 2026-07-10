@@ -8,7 +8,7 @@ DB_PORT="${ODOO_HARNESS_DB_PORT:-5432}"
 
 # Template odoo.conf: substitute ONLY our ODOO_HARNESS_* vars so any literal `$`
 # elsewhere in the file survives. envsubst comes from gettext-base (Dockerfile).
-envsubst '${ODOO_HARNESS_DB_HOST} ${ODOO_HARNESS_DB_PORT} ${ODOO_HARNESS_DB_USER} ${ODOO_HARNESS_DB_PASSWORD}' \
+envsubst '${ODOO_HARNESS_DB_HOST} ${ODOO_HARNESS_DB_PORT} ${ODOO_HARNESS_DB_USER} ${ODOO_HARNESS_DB_PASSWORD} ${ODOO_HARNESS_MASTER_PASSWORD}' \
   < /etc/odoo/odoo.conf.template > /etc/odoo/odoo.conf
 
 echo "harness-entrypoint: waiting for postgres at ${DB_HOST}:${DB_PORT}..."
