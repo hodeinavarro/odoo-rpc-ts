@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Exit, Layer, Ref, Schema } from "effect";
 import { layer as clientLayer, OdooClient } from "../src/client.ts";
 import { SchemaDriftError } from "../src/errors/schema.ts";
+import { OdooServerError } from "../src/errors/server.ts";
 import { layer as rpcLayer } from "../src/rpc.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
 
@@ -20,6 +21,12 @@ const handlers: FakeTransport.FakeHandlers = {
     unlink: () => true,
     fields_get: () => ({ name: { type: "char", string: "Name" } }),
     search_count: () => 5,
+    read_group: () => [{ is_company: true, is_company_count: 3, __count: 3 }],
+    name_search: () => [
+      [1, "Alice"],
+      [2, "Bob"],
+    ],
+    name_get: () => [[1, "Alice"]],
   },
 };
 
@@ -251,6 +258,191 @@ describe("OdooClient ops", () => {
       assert.strictEqual(log[0]?.method, "unlink");
       assert.deepStrictEqual(log[0]?.args, []);
       assert.deepStrictEqual(log[0]?.ids, [3]);
+    }),
+  );
+
+  it.effect("ref resolves an xml_id to [model, id] via check_object_reference", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        "ir.model.data": { check_object_reference: () => ["res.company", 1] },
+      });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const pair = yield* OdooClient.pipe(
+        Effect.flatMap((c) => c.ref("base.main_company")),
+        Effect.provide(layer),
+      );
+      assert.deepStrictEqual(pair, ["res.company", 1]);
+      const log = yield* Ref.get(fake.callLog);
+      // execute-kw dialect: (module, name) positional.
+      assert.deepStrictEqual(log[0]?.args, ["base", "main_company"]);
+    }),
+  );
+
+  it.effect("ref sends (module, xml_id) by name on the json2 dialect", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make(
+        { "ir.model.data": { check_object_reference: () => ["res.company", 1] } },
+        { dialect: "json2" },
+      );
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      yield* OdooClient.pipe(
+        Effect.flatMap((c) => c.ref("base.main_company")),
+        Effect.provide(layer),
+      );
+      const log = yield* Ref.get(fake.callLog);
+      assert.deepStrictEqual(log[0]?.args, []);
+      assert.strictEqual(log[0]?.kwargs["module"], "base");
+      assert.strictEqual(log[0]?.kwargs["xml_id"], "main_company");
+    }),
+  );
+
+  it.effect("ref: [model, false] (not visible) → OdooMissingError naming the xml_id", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        "ir.model.data": { check_object_reference: () => ["res.company", false] },
+      });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const error = yield* OdooClient.pipe(
+        Effect.flatMap((c) => c.ref("base.hidden_company")),
+        Effect.provide(layer),
+        Effect.flip,
+      );
+      assert.strictEqual(error._tag, "OdooMissingError");
+      if (error._tag === "OdooMissingError") {
+        assert.deepStrictEqual(error.arguments, ["base.hidden_company"]);
+      }
+    }),
+  );
+
+  it.effect("ref: an unknown xml_id (server ValueError) → OdooMissingError", () =>
+    Effect.gen(function* () {
+      const serverError = new OdooServerError({
+        name: "builtins.ValueError",
+        message: "External ID not found in the system: base.nope",
+        arguments: ["External ID not found in the system: base.nope"],
+        context: {},
+      });
+      const fake = FakeTransport.make({
+        "ir.model.data": { check_object_reference: () => Effect.fail(serverError) },
+      });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const error = yield* OdooClient.pipe(
+        Effect.flatMap((c) => c.ref("base.nope")),
+        Effect.provide(layer),
+        Effect.flip,
+      );
+      assert.strictEqual(error._tag, "OdooMissingError");
+    }),
+  );
+
+  it.effect("call is a raw, undecoded passthrough carrying ids/context/kwargs", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        "res.partner": { some_method: () => ({ anything: [1, "raw"] }) },
+      });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const raw = yield* OdooClient.pipe(
+        Effect.flatMap((c) =>
+          c.call("res.partner", "some_method", {
+            ids: [7],
+            kwargs: { foo: "bar" },
+            context: { lang: "es_ES" },
+          }),
+        ),
+        Effect.provide(layer),
+      );
+      assert.deepStrictEqual(raw, { anything: [1, "raw"] });
+      const log = yield* Ref.get(fake.callLog);
+      assert.deepStrictEqual(log[0]?.ids, [7]);
+      assert.strictEqual(log[0]?.kwargs["foo"], "bar");
+      assert.deepStrictEqual(log[0]?.kwargs["context"], { lang: "es_ES" });
+    }),
+  );
+
+  it.effect("readGroup decodes group rows and passes stable kwargs", () =>
+    Effect.gen(function* () {
+      const { value, log } = yield* withLog((_) =>
+        OdooClient.pipe(
+          Effect.flatMap((c) =>
+            c.readGroup("res.partner", {
+              domain: [["is_company", "=", true]],
+              fields: ["is_company"],
+              groupby: ["is_company"],
+              limit: 10,
+              lazy: false,
+            }),
+          ),
+        ),
+      );
+      assert.strictEqual(value[0]?.["__count"], 3);
+      assert.strictEqual(log[0]?.method, "read_group");
+      assert.deepStrictEqual(log[0]?.kwargs["domain"], [["is_company", "=", true]]);
+      assert.deepStrictEqual(log[0]?.kwargs["fields"], ["is_company"]);
+      assert.deepStrictEqual(log[0]?.kwargs["groupby"], ["is_company"]);
+      assert.strictEqual(log[0]?.kwargs["limit"], 10);
+      assert.strictEqual(log[0]?.kwargs["lazy"], false);
+    }),
+  );
+
+  it.effect("nameSearch sends name/args/operator/limit POSITIONALLY over execute-kw", () =>
+    Effect.gen(function* () {
+      const { value, log } = yield* withLog((_) =>
+        OdooClient.pipe(
+          Effect.flatMap((c) =>
+            c.nameSearch("res.partner", {
+              name: "Al",
+              args: [["is_company", "=", true]],
+              operator: "ilike",
+              limit: 5,
+            }),
+          ),
+        ),
+      );
+      assert.deepStrictEqual(value, [
+        [1, "Alice"],
+        [2, "Bob"],
+      ]);
+      assert.deepStrictEqual(log[0]?.args, ["Al", [["is_company", "=", true]], "ilike", 5]);
+    }),
+  );
+
+  it.effect("nameSearch sends name/domain/operator/limit by NAME on the json2 dialect", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make(handlers, { dialect: "json2" });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      yield* OdooClient.pipe(
+        Effect.flatMap((c) =>
+          c.nameSearch("res.partner", { name: "Al", args: [["is_company", "=", true]], limit: 5 }),
+        ),
+        Effect.provide(layer),
+      );
+      const log = yield* Ref.get(fake.callLog);
+      assert.deepStrictEqual(log[0]?.args, []);
+      assert.strictEqual(log[0]?.kwargs["name"], "Al");
+      assert.deepStrictEqual(log[0]?.kwargs["domain"], [["is_company", "=", true]]);
+      assert.strictEqual(log[0]?.kwargs["operator"], "ilike");
+      assert.strictEqual(log[0]?.kwargs["limit"], 5);
+    }),
+  );
+
+  it.effect("nameSearch defaults name/operator/limit when omitted", () =>
+    Effect.gen(function* () {
+      const { log } = yield* withLog((_) =>
+        OdooClient.pipe(Effect.flatMap((c) => c.nameSearch("res.partner"))),
+      );
+      assert.deepStrictEqual(log[0]?.args, ["", [], "ilike", 100]);
+    }),
+  );
+
+  it.effect("nameGet targets ids on the seam and decodes pairs", () =>
+    Effect.gen(function* () {
+      const { value, log } = yield* withLog((_) =>
+        OdooClient.pipe(Effect.flatMap((c) => c.nameGet("res.partner", [1]))),
+      );
+      assert.deepStrictEqual(value, [[1, "Alice"]]);
+      assert.strictEqual(log[0]?.method, "name_get");
+      assert.deepStrictEqual(log[0]?.args, []);
+      assert.deepStrictEqual(log[0]?.ids, [1]);
     }),
   );
 

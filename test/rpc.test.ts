@@ -1,10 +1,16 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Cause, Effect, Exit, Layer, Option, Ref } from "effect";
-import { GlobalContext, layer as rpcLayer, layerWith, Rpc } from "../src/rpc.ts";
+import { GlobalContext, layer as rpcLayer, layerSeeded, layerWith, Rpc } from "../src/rpc.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
 
 const lastContext = (log: ReadonlyArray<{ readonly kwargs: Record<string, unknown> }>) =>
   log[log.length - 1]?.kwargs["context"];
+
+const countMethod = (
+  log: ReadonlyArray<{ readonly model: string; readonly method: string }>,
+  model: string,
+  method: string,
+) => log.filter((c) => c.model === model && c.method === method).length;
 
 describe("Rpc.callKw — context merge", () => {
   it.effect("merges session < layer overrides < caller (later wins)", () =>
@@ -104,6 +110,104 @@ describe("Rpc.callKw — context merge", () => {
           assert.include(String(die.value), "kwargs.context");
         }
       }
+    }),
+  );
+
+  it.effect("layerSeeded seeds the base tier from res.users.context_get", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        "res.users": { context_get: () => ({ lang: "es_ES", tz: "Europe/Madrid" }) },
+        m: { ping: () => true },
+      });
+      const layer = layerSeeded().pipe(Layer.provide(fake.layer));
+
+      yield* Rpc.pipe(
+        Effect.flatMap((rpc) => rpc.callKw("m", "ping", [], {}, { context: { c: "caller" } })),
+        Effect.provide(layer),
+      );
+
+      const log = yield* Ref.get(fake.callLog);
+      // The seeded lang/tz sit at the base tier, below the caller context.
+      assert.deepStrictEqual(lastContext(log), {
+        lang: "es_ES",
+        tz: "Europe/Madrid",
+        c: "caller",
+      });
+    }),
+  );
+
+  it.effect("layerSeeded resolves the provider once across many calls (single-flight)", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({
+        "res.users": { context_get: () => ({ lang: "en_US" }) },
+        m: { ping: () => true },
+      });
+      const layer = layerSeeded().pipe(Layer.provide(fake.layer));
+
+      yield* Rpc.pipe(
+        Effect.flatMap((rpc) =>
+          Effect.gen(function* () {
+            yield* rpc.callKw("m", "ping", []);
+            yield* rpc.callKw("m", "ping", []);
+            yield* rpc.callKw("m", "ping", []);
+          }),
+        ),
+        Effect.provide(layer),
+      );
+
+      const log = yield* Ref.get(fake.callLog);
+      assert.strictEqual(countMethod(log, "res.users", "context_get"), 1);
+      assert.strictEqual(countMethod(log, "m", "ping"), 3);
+    }),
+  );
+
+  it.effect("layerSeeded: a failed seed surfaces as the call error and is retryable", () =>
+    Effect.gen(function* () {
+      let attempts = 0;
+      const fake = FakeTransport.make({
+        "res.users": {
+          // First seed attempt drifts (a non-object payload → SchemaDriftError);
+          // the second succeeds. Success-only single-flight must retry.
+          context_get: () => (attempts++ === 0 ? "not-an-object" : { lang: "en_US" }),
+        },
+        m: { ping: () => true },
+      });
+      const layer = layerSeeded().pipe(Layer.provide(fake.layer));
+
+      yield* Rpc.pipe(
+        Effect.flatMap((rpc) =>
+          Effect.gen(function* () {
+            const first = yield* rpc.callKw("m", "ping", []).pipe(Effect.exit);
+            assert.isTrue(Exit.isFailure(first));
+            if (Exit.isFailure(first) && first.cause._tag === "Fail") {
+              assert.strictEqual(first.cause.error._tag, "SchemaDriftError");
+            }
+            // The seed retries on the next call and now succeeds.
+            yield* rpc.callKw("m", "ping", []);
+          }),
+        ),
+        Effect.provide(layer),
+      );
+
+      const log = yield* Ref.get(fake.callLog);
+      assert.strictEqual(countMethod(log, "res.users", "context_get"), 2);
+      assert.deepStrictEqual(lastContext(log), { lang: "en_US" });
+    }),
+  );
+
+  it.effect("layerWith without a provider keeps today's behavior (no seeding call)", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make({ m: { ping: () => true } });
+      const layer = layerWith({ globalContext: { a: "layer" } }).pipe(Layer.provide(fake.layer));
+
+      yield* Rpc.pipe(
+        Effect.flatMap((rpc) => rpc.callKw("m", "ping", [])),
+        Effect.provide(layer),
+      );
+
+      const log = yield* Ref.get(fake.callLog);
+      assert.strictEqual(countMethod(log, "res.users", "context_get"), 0);
+      assert.deepStrictEqual(lastContext(log), { a: "layer" });
     }),
   );
 
