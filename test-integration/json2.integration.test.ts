@@ -4,7 +4,7 @@
  * harness stack.
  */
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Schema } from "effect";
 import { NodeHttpClient } from "@effect/platform-node";
 import {
   Json2Transport,
@@ -14,6 +14,7 @@ import {
   RpcLive,
   Transport,
 } from "../src/index.ts";
+import { defineRecord } from "../src/records/index.ts";
 import {
   apiKeyConfig,
   badApiKeyConfig,
@@ -104,6 +105,40 @@ describe.skipIf(!enabled)("json2 (live, Odoo 19+)", () => {
           .write("res.partner", [BOGUS_ID], { ref: "nope" })
           .pipe(Effect.flip);
         assert.strictEqual(error._tag, "OdooMissingError");
+      }).pipe(Effect.provide(appLayer())),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!enabled)(
+    "write + saveTyped bind the `vals` kwarg live (keyword-only dialect)",
+    () =>
+      Effect.gen(function* () {
+        // Live proof of the kwarg-name-binding class of failure: JSON-2 forwards
+        // kwargs by NAME into `write(self, vals)` / `web_save(self, vals,
+        // specification)` — a wrong name is a 422 bad-signature fault here.
+        const Partner = defineRecord("res.partner", {
+          name: Schema.String,
+          ref: Schema.Union(Schema.String, Schema.Literal(false)),
+        });
+        const client = yield* OdooClient;
+        const tag = marker();
+        const ids = yield* client.create("res.partner", { name: tag });
+        yield* Effect.gen(function* () {
+          const wrote = yield* client.write("res.partner", ids, { ref: `${tag}-ref` });
+          assert.strictEqual(wrote, true);
+          const read = yield* client.read("res.partner", ids, ["ref"]);
+          assert.strictEqual(read[0]?.["ref"], `${tag}-ref`);
+
+          const saved = yield* client.saveTyped(
+            Partner,
+            ids,
+            { name: `${tag}-renamed` },
+            { serverMajor: majorVersion },
+          );
+          assert.strictEqual(saved.length, 1);
+          assert.strictEqual(saved[0]?.name, `${tag}-renamed`);
+          assert.strictEqual(saved[0]?.ref, `${tag}-ref`);
+        }).pipe(Effect.ensuring(client.unlink("res.partner", ids).pipe(Effect.ignore)));
       }).pipe(Effect.provide(appLayer())),
     TIMEOUT_MS,
   );

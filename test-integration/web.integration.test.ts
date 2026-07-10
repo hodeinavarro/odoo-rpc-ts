@@ -90,6 +90,30 @@ describe.skipIf(!hasStack)("web (live)", () => {
   );
 
   it.live.skipIf(!hasStack)(
+    "write round trip over WebTransport, including the write([], vals) no-op",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* OdooClient;
+        const name = marker();
+        const ids = yield* client.create("res.partner", { name });
+        yield* Effect.gen(function* () {
+          // End-to-end proof of the call_kw envelope: args=[ids, vals], vals
+          // positional (a `vals=` kwarg breaks on renamed write overrides).
+          const wrote = yield* client.write("res.partner", ids, { ref: `${name}-ref` });
+          assert.strictEqual(wrote, true);
+          const read = yield* client.read("res.partner", ids, ["ref"]);
+          assert.strictEqual(read[0]?.["ref"], `${name}-ref`);
+          // Empty-ids no-op: the server accepts args=[[], vals] and returns true.
+          const noop = yield* client.write("res.partner", [], { ref: `${name}-noop` });
+          assert.strictEqual(noop, true);
+          const untouched = yield* client.read("res.partner", ids, ["ref"]);
+          assert.strictEqual(untouched[0]?.["ref"], `${name}-ref`);
+        }).pipe(Effect.ensuring(client.unlink("res.partner", ids).pipe(Effect.ignore)));
+      }).pipe(Effect.provide(appLayer())),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!hasStack)(
     "an invalid password → OdooAuthenticationError",
     () =>
       Effect.gen(function* () {

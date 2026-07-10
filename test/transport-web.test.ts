@@ -125,6 +125,16 @@ describe("WebTransport", () => {
       });
       // Only the call_kw envelope carries `args`; its args = [ids, ...args].
       assert.deepStrictEqual(bodies[0]?.args, [[1, 2], { name: "X" }]);
+      // An EMPTY ids seam must still ride positionally — args = [[], vals],
+      // never dropped by a truthiness check (write([], vals) is a valid no-op).
+      yield* transport.callKw({
+        model: "res.partner",
+        method: "write",
+        args: [{ name: "X" }],
+        kwargs: {},
+        ids: [],
+      });
+      assert.deepStrictEqual(bodies[1]?.args, [[], { name: "X" }]);
     }).pipe(
       Effect.provide(
         WebTransport.layer(config).pipe(

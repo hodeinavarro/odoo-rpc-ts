@@ -430,12 +430,18 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
       gateSpec(record.hasRelations, false, options?.serverMajor).pipe(
         Effect.flatMap((gate) => {
           if (gate._tag === "unsupported") {
-            return Effect.fail(specUnsupported(record.model, "web_search_read", gate.serverVersion));
+            return Effect.fail(
+              specUnsupported(record.model, "web_search_read", gate.serverVersion),
+            );
           }
           if (gate._tag === "degrade") {
             // Relation-free on < 17: plain search_read over the declared fields;
             // the row schema decodes both wire shapes identically.
-            return searchRead(record.model, { ...options, fields: declaredFields(record) }, record.schema);
+            return searchRead(
+              record.model,
+              { ...options, fields: declaredFields(record) },
+              record.schema,
+            );
           }
           return Effect.sync(() => compileSpecification(record)).pipe(
             Effect.flatMap((specification) => {
@@ -454,7 +460,9 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
                 withContext(options?.context),
               );
             }),
-            Effect.flatMap(decode(WebSearchReadResult(record.schema), `${record.model}.web_search_read`)),
+            Effect.flatMap(
+              decode(WebSearchReadResult(record.schema), `${record.model}.web_search_read`),
+            ),
             Effect.map((result) => result.records),
           );
         }),
@@ -563,13 +571,19 @@ export const layer: Layer.Layer<OdooClient, never, Rpc> = Layer.effect(
       model: string,
       ids: ReadonlyArray<number>,
       values: OdooRecord,
-    ): Effect.Effect<true, TransportCallError> =>
-      rpc
-        // vals MUST be positional: models override write(self, <any param name>)
-        // (e.g. project.task uses a different name), so a `vals=` kwarg breaks
-        // on real instances. Verified live against Odoo 16 (2026-07-10).
-        .callKw(model, "write", [values], {}, { ids })
-        .pipe(Effect.flatMap(decode(TrueLiteral, `${model}.write`)));
+    ): Effect.Effect<true, TransportCallError> => {
+      // Dialect split, same reason as `create`: over execute_kw the vals MUST be
+      // positional — models override write(self, <any param name>) (e.g.
+      // project.task uses a different name), so a `vals=` kwarg breaks on real
+      // instances (verified live against Odoo 16, 2026-07-10). JSON-2 is
+      // keyword-only (the transport rejects positional args) and binds the core
+      // signature's `vals` (odoo/orm/models.py, 19.0; verified live 2026-07-10).
+      const call =
+        rpc.dialect === "json2"
+          ? rpc.callKw(model, "write", [], { vals: values }, { ids })
+          : rpc.callKw(model, "write", [values], {}, { ids });
+      return call.pipe(Effect.flatMap(decode(TrueLiteral, `${model}.write`)));
+    };
 
     const unlink = (
       model: string,

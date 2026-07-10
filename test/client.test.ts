@@ -185,6 +185,45 @@ describe("OdooClient ops", () => {
     }),
   );
 
+  it.effect("write sends vals positionally + ids on the seam (execute-kw dialect)", () =>
+    Effect.gen(function* () {
+      const { log } = yield* withLog((_) =>
+        OdooClient.pipe(Effect.flatMap((c) => c.write("res.partner", [1, 2], { name: "X" }))),
+      );
+      assert.deepStrictEqual(log[0]?.args, [{ name: "X" }]);
+      assert.deepStrictEqual(log[0]?.ids, [1, 2]);
+      assert.strictEqual(log[0]?.kwargs["vals"], undefined);
+    }),
+  );
+
+  it.effect("write uses the vals kwarg (no positional args) on a json2-dialect transport", () =>
+    Effect.gen(function* () {
+      const fake = FakeTransport.make(handlers, { dialect: "json2" });
+      const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
+      const ok = yield* Effect.provide(
+        OdooClient.pipe(Effect.flatMap((c) => c.write("res.partner", [1, 2], { name: "X" }))),
+        layer,
+      );
+      const log = yield* Ref.get(fake.callLog);
+      assert.strictEqual(ok, true);
+      // JSON-2 rejects positional args — vals must ride as the `vals` kwarg.
+      assert.deepStrictEqual(log[0]?.args, []);
+      assert.deepStrictEqual(log[0]?.kwargs["vals"], { name: "X" });
+      assert.deepStrictEqual(log[0]?.ids, [1, 2]);
+    }),
+  );
+
+  it.effect("write with EMPTY ids keeps the ids seam (no truthiness drop)", () =>
+    Effect.gen(function* () {
+      const { log } = yield* withLog((_) =>
+        OdooClient.pipe(Effect.flatMap((c) => c.write("res.partner", [], { name: "X" }))),
+      );
+      // The transport must still prepend `[]` positionally → args=[[], vals].
+      assert.deepStrictEqual(log[0]?.ids, []);
+      assert.deepStrictEqual(log[0]?.args, [{ name: "X" }]);
+    }),
+  );
+
   it.effect("unlink returns true", () =>
     Effect.gen(function* () {
       const ok = yield* run(OdooClient.pipe(Effect.flatMap((c) => c.unlink("res.partner", [1]))));
