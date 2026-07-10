@@ -1,0 +1,175 @@
+/**
+ * Pure relation & temporal value schemas — the decode vocabulary for typed
+ * records. No I/O: these are `effect/Schema` definitions a caller composes into
+ * a row schema. They transform Odoo's on-the-wire shapes (classic `[id, name]`
+ * many2one pairs, `false` empties, naive datetime strings) into ergonomic,
+ * fully-typed domain values, failing loudly as schema drift on anything else.
+ */
+import { ParseResult, Schema } from "effect";
+
+// --- many2one references ----------------------------------------------------
+
+/**
+ * A decoded many2one reference: the related record's id and its display label,
+ * as Odoo carries them together in a classic `search_read`/`read` payload. The
+ * label is already present, so the common "show the name" case needs ZERO extra
+ * round trips — see {@link ../typed.ts | TypedRecordSet.fetchRelated} for when
+ * you need more than the label.
+ */
+export interface Many2OneRefValue {
+  readonly id: number;
+  readonly name: string;
+}
+
+/** The decoded-value schema for a {@link Many2OneRefValue}. */
+export const Many2OneRefValue: Schema.Schema<Many2OneRefValue> = Schema.Struct({
+  id: Schema.Number,
+  name: Schema.String,
+});
+
+/** Odoo's on-the-wire many2one shape: the classic `[id, name]` pair. */
+const Many2OneWirePair = Schema.Tuple(Schema.Number, Schema.String);
+
+/**
+ * Decode a present many2one from its wire `[id, name]` pair to a
+ * {@link Many2OneRefValue}. Use {@link Many2OneRefOrNull} for a field that can
+ * be empty (Odoo sends `false`, not `null`, for an unset many2one).
+ *
+ * WIRE FACT: the `[id, name]` pair requires the classic `_classic_read` load
+ * (the `search_read`/`read` default). A context that changes the load (e.g. a
+ * future `load=None`) shifts the shape; strict decode then surfaces it as
+ * {@link SchemaDriftError} rather than casting past it.
+ */
+export const Many2OneRefFromWire: Schema.Schema<Many2OneRefValue, readonly [number, string]> =
+  Schema.transform(Many2OneWirePair, Many2OneRefValue, {
+    strict: true,
+    decode: ([id, name]) => ({ id, name }),
+    encode: ({ id, name }) => [id, name] as const,
+  });
+
+/** Ergonomic alias for {@link Many2OneRefFromWire} (the present-ref schema). */
+export const Many2OneRef = Many2OneRefFromWire;
+
+/** The wire shape of a nullable many2one: the `[id, name]` pair or `false`. */
+const Many2OneWireOrFalse = Schema.Union(Many2OneWirePair, Schema.Literal(false));
+
+/**
+ * Decode a nullable many2one: the wire `[id, name]` pair → {@link Many2OneRefValue},
+ * or Odoo's `false` empty → `null`. This is the schema a row declares for a
+ * many2one that can be unset, e.g. `company_id: Many2OneRefOrNull`.
+ */
+export const Many2OneRefOrNull: Schema.Schema<
+  Many2OneRefValue | null,
+  readonly [number, string] | false
+> = Schema.transform(Many2OneWireOrFalse, Schema.NullOr(Many2OneRefValue), {
+  strict: true,
+  decode: (wire) => (wire === false ? null : { id: wire[0], name: wire[1] }),
+  encode: (value) => (value === null ? (false as const) : ([value.id, value.name] as const)),
+});
+
+// --- dates & datetimes ------------------------------------------------------
+
+// Odoo Date is `"YYYY-MM-DD"`; Datetime is `"YYYY-MM-DD HH:MM:SS"`, both naive.
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const DATETIME_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+const pad = (n: number, width: number): string => n.toString().padStart(width, "0");
+
+const formatUtcDate = (date: Date): string =>
+  `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1, 2)}-${pad(date.getUTCDate(), 2)}`;
+
+const formatUtcDateTime = (date: Date): string =>
+  `${formatUtcDate(date)} ${pad(date.getUTCHours(), 2)}:${pad(date.getUTCMinutes(), 2)}:${pad(
+    date.getUTCSeconds(),
+    2,
+  )}`;
+
+/**
+ * Odoo `Date` field: `"YYYY-MM-DD"` → a `Date` at UTC midnight of that day.
+ *
+ * A `Date` is an instant, and Odoo's `Date` carries no time or zone. We anchor
+ * it at UTC midnight and NEVER localize — reading back `getUTCFullYear()`/
+ * `getUTCMonth()`/`getUTCDate()` reproduces the exact wire day on any host,
+ * whereas the local accessors could roll a day depending on the runner's tz.
+ * Decision (records design, 2026-07-10): decode as UTC, documented, never
+ * silently localized.
+ */
+export const OdooDate: Schema.Schema<Date, string> = Schema.transformOrFail(
+  Schema.String,
+  Schema.DateFromSelf,
+  {
+    strict: true,
+    decode: (input, _options, ast) => {
+      if (!DATE_RE.test(input)) {
+        return ParseResult.fail(new ParseResult.Type(ast, input, "expected YYYY-MM-DD"));
+      }
+      const ms = Date.parse(`${input}T00:00:00Z`);
+      return Number.isNaN(ms)
+        ? ParseResult.fail(new ParseResult.Type(ast, input, "not a valid calendar date"))
+        : ParseResult.succeed(new Date(ms));
+    },
+    encode: (date, _options, ast) =>
+      Number.isNaN(date.getTime())
+        ? ParseResult.fail(new ParseResult.Type(ast, date, "invalid Date"))
+        : ParseResult.succeed(formatUtcDate(date)),
+  },
+);
+
+/**
+ * Odoo `Datetime` field: `"YYYY-MM-DD HH:MM:SS"` → a `Date` parsed as UTC.
+ *
+ * Odoo stores and transmits datetimes as naive strings that are UTC by
+ * convention. A JS `Date` is a single instant, so parsing the wire string AS
+ * UTC is the faithful, non-localizing choice: it names the same instant Odoo
+ * meant, with no host-tz shift. We never apply the session tz here — that is a
+ * presentation concern the caller owns. Decision (records design, 2026-07-10).
+ */
+export const OdooDateTime: Schema.Schema<Date, string> = Schema.transformOrFail(
+  Schema.String,
+  Schema.DateFromSelf,
+  {
+    strict: true,
+    decode: (input, _options, ast) => {
+      if (!DATETIME_RE.test(input)) {
+        return ParseResult.fail(new ParseResult.Type(ast, input, "expected YYYY-MM-DD HH:MM:SS"));
+      }
+      const ms = Date.parse(`${input.replace(" ", "T")}Z`);
+      return Number.isNaN(ms)
+        ? ParseResult.fail(new ParseResult.Type(ast, input, "not a valid calendar datetime"))
+        : ParseResult.succeed(new Date(ms));
+    },
+    encode: (date, _options, ast) =>
+      Number.isNaN(date.getTime())
+        ? ParseResult.fail(new ParseResult.Type(ast, date, "invalid Date"))
+        : ParseResult.succeed(formatUtcDateTime(date)),
+  },
+);
+
+/**
+ * Lift a `Schema<Date, string>` into one that also accepts Odoo's `false`
+ * empty, decoding it to `null`. Shared by the date and datetime nullable
+ * variants so the false↔null seam lives in exactly one place.
+ */
+const orFalseNull = (
+  base: Schema.Schema<Date, string>,
+): Schema.Schema<Date | null, string | false> =>
+  Schema.transformOrFail(
+    Schema.Union(Schema.String, Schema.Literal(false)),
+    Schema.NullOr(Schema.DateFromSelf),
+    {
+      strict: true,
+      decode: (wire, options) =>
+        wire === false ? ParseResult.succeed(null) : ParseResult.decodeUnknown(base)(wire, options),
+      encode: (value, options) =>
+        value === null
+          ? ParseResult.succeed(false as const)
+          : ParseResult.encodeUnknown(base)(value, options),
+    },
+  );
+
+/** {@link OdooDate} with Odoo's `false` empty decoding to `null`. */
+export const OdooDateOrNull: Schema.Schema<Date | null, string | false> = orFalseNull(OdooDate);
+
+/** {@link OdooDateTime} with Odoo's `false` empty decoding to `null`. */
+export const OdooDateTimeOrNull: Schema.Schema<Date | null, string | false> =
+  orFalseNull(OdooDateTime);
