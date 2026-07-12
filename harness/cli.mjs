@@ -14,7 +14,7 @@
 // `up` is idempotent: on an already-running, already-seeded stack it is a no-op that
 // just prints the state file path.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -162,36 +162,46 @@ function up(version) {
 
   if (!existsSync(c.stateFile)) {
     console.log(`harness: seeding rpc user + API key…`);
-    mkdirSync(c.stateDir, { recursive: true });
+    // The bind-mounted seeder runs as the image's `odoo` user, not as the host
+    // caller. Let it create the per-version directory, then close the shared
+    // root again as soon as the one-shot container exits. Remove a prior
+    // incomplete directory first so its host ownership cannot block the retry.
+    rmSync(c.stateDir, { recursive: true, force: true });
+    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+    chmodSync(STATE_ROOT, 0o733);
     // Mount the whole .state dir; seed writes <version>/env under it.
-    dc(
-      c,
-      [
-        "run",
-        "--rm",
-        "-T",
-        "-v",
-        `${STATE_ROOT}:/harness-state`,
-        "-e",
-        `ODOO_HARNESS_DB=${c.db}`,
-        "-e",
-        `ODOO_HARNESS_PORT=${c.port}`,
-        "-e",
-        `ODOO_HARNESS_VERSION=${version}`,
-        "-e",
-        `ODOO_HARNESS_MASTER_PASSWORD=${c.env.ODOO_HARNESS_MASTER_PASSWORD}`,
-        "odoo",
-        "odoo",
-        "shell",
-        "-c",
-        "/etc/odoo/odoo.conf",
-        "-d",
-        c.db,
-        "--no-http",
-      ],
-      // Pipe the seed script to `odoo shell` stdin; keep out/err on the console.
-      { input: readSeed(), stdio: ["pipe", "inherit", "inherit"] },
-    );
+    try {
+      dc(
+        c,
+        [
+          "run",
+          "--rm",
+          "-T",
+          "-v",
+          `${STATE_ROOT}:/harness-state`,
+          "-e",
+          `ODOO_HARNESS_DB=${c.db}`,
+          "-e",
+          `ODOO_HARNESS_PORT=${c.port}`,
+          "-e",
+          `ODOO_HARNESS_VERSION=${version}`,
+          "-e",
+          `ODOO_HARNESS_MASTER_PASSWORD=${c.env.ODOO_HARNESS_MASTER_PASSWORD}`,
+          "odoo",
+          "odoo",
+          "shell",
+          "-c",
+          "/etc/odoo/odoo.conf",
+          "-d",
+          c.db,
+          "--no-http",
+        ],
+        // Pipe the seed script to `odoo shell` stdin; keep out/err on the console.
+        { input: readSeed(), stdio: ["pipe", "inherit", "inherit"] },
+      );
+    } finally {
+      chmodSync(STATE_ROOT, 0o700);
+    }
     if (!existsSync(c.stateFile)) {
       fail(`seed ran but no state file at ${c.stateFile} — check logs.`);
     }

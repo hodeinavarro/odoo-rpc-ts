@@ -93,4 +93,4 @@ jobs:
 
       - name: Tear down the harness
         if: always()
-        run: pnpm harness down
+        run: pnpm harness down ${{ matrix.version }}
