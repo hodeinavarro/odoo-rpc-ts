@@ -1,13 +1,12 @@
-# odoo-rpc-ts
+# @hodeinavarro/odoo-rpc-ts
 
 Effect-native, strongly-typed Odoo RPC client for TypeScript. **Odoo 16–19**,
 three wire protocols behind one seam — JSON-RPC, the new JSON-2 API (19+),
 and the cookie-session web route — with a tagged-error taxonomy you can
 `catchTag` instead of parsing messages.
 
-> **Status:** private, pre-1.0, and currently consumed from the sibling checkout
-> in a private personal project. It is not published to a
-> package registry yet.
+> **Status:** private, pre-1.0, and published through GitHub Packages for
+> a private personal project.
 
 ## Scope
 
@@ -17,14 +16,10 @@ services. It does not own private personal project models, UI, persistence, work
 automatic protocol selection. XML-RPC and generated per-model clients are
 deliberately out of scope.
 
-For the current source-checkout workflow, keep this repository beside private personal project and
-run `pnpm rpc:build` from private personal project. For a registry-based private installation, see
-[Private publishing](docs/private-publishing.md).
-
-Once a package is published, consumers install it with:
+After authenticating to GitHub Packages, consumers install it with:
 
 ```
-pnpm add odoo-rpc-ts effect@4.0.0-beta.93
+pnpm add @hodeinavarro/odoo-rpc-ts effect@4.0.0-beta.93
 pnpm add @effect/platform-node@4.0.0-beta.93   # or run in the browser with FetchHttpClient
 ```
 
@@ -39,7 +34,7 @@ Set `ODOO_URL`, `ODOO_DB`, `ODOO_USERNAME`, and `ODOO_API_KEY` (or
 ```ts
 import { Effect, Layer, Schema } from "effect";
 import { NodeHttpClient } from "@effect/platform-node";
-import { JsonRpcTransport, OdooClient, OdooClientLive, RpcLive } from "odoo-rpc-ts";
+import { JsonRpcTransport, OdooClient, OdooClientLive, RpcLive } from "@hodeinavarro/odoo-rpc-ts";
 
 // One layer graph: client → rpc → transport → your HTTP runtime.
 const OdooLive = OdooClientLive.layer.pipe(
@@ -97,7 +92,7 @@ const findOrCreatePartner = (email: string, name: string) =>
 **Bulk update with domain combinators** (`AND` / `OR` / `NOT`):
 
 ```ts
-import { AND, OR } from "odoo-rpc-ts";
+import { AND, OR } from "@hodeinavarro/odoo-rpc-ts";
 
 const archiveStaleLeads = Effect.gen(function* () {
   const odoo = yield* OdooClient;
@@ -139,7 +134,7 @@ version (16+) understands. Pick by the oldest server you must reach.
 declare the graph, get ONE `web_search_read`:
 
 ```ts
-import { defineRecord, Many2One, OdooClient, OdooDateTime } from "odoo-rpc-ts"
+import { defineRecord, Many2One, OdooClient, OdooDateTime } from "@hodeinavarro/odoo-rpc-ts"
 import { Schema } from "effect"
 
 const Company = defineRecord("res.company", { name: Schema.String })
@@ -167,7 +162,7 @@ classic `[id, name]` refs; batch the hop when you need it, exactly one deduped
 `read`:
 
 ```ts
-import { Many2OneRefOrNull, OdooClient } from "odoo-rpc-ts"
+import { Many2OneRefOrNull, OdooClient } from "@hodeinavarro/odoo-rpc-ts"
 
 const PartnerRow = Schema.Struct({
   id: Schema.Number,
@@ -186,7 +181,7 @@ const pairs = Effect.gen(function* () {
 ## x2many writes without magic tuples
 
 ```ts
-import { Command } from "odoo-rpc-ts"
+import { Command } from "@hodeinavarro/odoo-rpc-ts"
 
 yield* odoo.write("res.partner", [companyId], {
   child_ids: [Command.create({ name: "New contact" }), Command.link(existingId)],
@@ -196,7 +191,7 @@ yield* odoo.write("res.partner", [companyId], {
 ## Services: databases, reports, profiles
 
 ```ts
-import { DbService, ReportService } from "odoo-rpc-ts"
+import { DbService, ReportService } from "@hodeinavarro/odoo-rpc-ts"
 
 // database administration (master-password gated; Node-oriented)
 const names = yield* DbService.listDatabases(url)
@@ -274,7 +269,7 @@ Layer.provide(WebTransport.layerConfig).pipe(Layer.provideMerge(CookieSessionLiv
 Cookie sessions expire; recovery is opt-in, never magic:
 
 ```ts
-import { CookieSession, retryOnSessionExpired } from "odoo-rpc-ts";
+import { CookieSession, retryOnSessionExpired } from "@hodeinavarro/odoo-rpc-ts";
 
 const resilientCount = Effect.gen(function* () {
   const session = yield* CookieSession;
@@ -290,7 +285,7 @@ never holds credentials:
 
 ```ts
 import { Redacted } from "effect";
-import { CookieSessionLive, WebTransport } from "odoo-rpc-ts";
+import { CookieSessionLive, WebTransport } from "@hodeinavarro/odoo-rpc-ts";
 
 const url = new URL("https://erp.example.com");
 
@@ -324,10 +319,11 @@ handles the encoding differences for you via the transport's `dialect`.
 
 ## Testing without a server
 
-`odoo-rpc-ts/testing` ships a deterministic `FakeTransport` with a call log:
+`@hodeinavarro/odoo-rpc-ts/testing` ships a deterministic `FakeTransport` with
+a call log:
 
 ```ts
-import * as FakeTransport from "odoo-rpc-ts/testing";
+import * as FakeTransport from "@hodeinavarro/odoo-rpc-ts/testing";
 
 const fake = FakeTransport.make({
   "res.partner": {

@@ -1,11 +1,11 @@
 /**
- * odoo-rpc-ts — public surface.
+ * @hodeinavarro/odoo-rpc-ts — public surface.
  *
  * A modern, Effect-native, strongly-typed Odoo RPC client: the shared
  * contracts (errors, the `Transport` seam, config, domains, version
  * resolution), the three transports, the session/auth services, and the
  * high-level `OdooClient`. The `FakeTransport` testing double ships from the
- * separate `odoo-rpc-ts/testing` entry point.
+ * separate `@hodeinavarro/odoo-rpc-ts/testing` entry point.
  */
 
 // Error taxonomy + the fault mapper.

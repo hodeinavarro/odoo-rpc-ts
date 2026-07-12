@@ -1,5 +1,5 @@
 /**
- * odoo-rpc-ts/testing — deterministic test doubles.
+ * @hodeinavarro/odoo-rpc-ts/testing — deterministic test doubles.
  *
  * `FakeTransport` is a scripted, network-free {@link Transport} implementation
  * (AGENTS.md § Testing export). Compose its `.layer` under the service you want

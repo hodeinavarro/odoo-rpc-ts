@@ -1,5 +1,5 @@
 {
-  "name": "odoo-rpc-ts",
+  "name": "@hodeinavarro/odoo-rpc-ts",
   "version": "0.1.0",
   "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript \u2014 JSON-RPC, JSON-2, and cookie-session transports for Odoo 16\u201319 with a tagged-error taxonomy.",
   "keywords": [
@@ -35,6 +35,10 @@
       "default": "./dist/testing/index.js"
     },
     "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com"
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/fix-dts-extensions.mjs",

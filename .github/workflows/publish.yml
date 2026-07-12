@@ -1,0 +1,70 @@
+name: Publish package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: validate and publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        run: |
+          npm install --global pnpm@11.12.0 --ignore-scripts
+          test "$(pnpm --version)" = "11.12.0"
+
+      - name: Install Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 26
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@hodeinavarro"
+
+      # minimumReleaseAge protects ordinary installs. Publishing validates the
+      # exact frozen lockfile and deliberately bypasses the age gate so a fresh,
+      # reviewed dependency release cannot make the release job nondeterministic.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --config.minimumReleaseAge=0
+
+      - name: Verify release tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          expected="v$(node --print "require('./package.json').version")"
+          test "${GITHUB_REF_NAME}" = "${expected}"
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Publish immutable package
+        # The short-lived repository token is available only to the registry
+        # write. The package scope and restricted visibility are declared in
+        # package.json; no personal token or persisted Git credential is used.
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm publish --no-git-checks

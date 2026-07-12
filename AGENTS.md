@@ -72,7 +72,7 @@ explicit consumer-provided Layer — no auto-negotiation. **XML-RPC is
 deliberately not supported** (JSON-RPC reaches the same `common`/`object`/`db`
 services on every supported version; XML-RPC adds only a lossy fault channel
 and a marshaller to own). Single npm package with subpath exports
-(`odoo-rpc-ts`, `odoo-rpc-ts/testing`).
+(`@hodeinavarro/odoo-rpc-ts`, `@hodeinavarro/odoo-rpc-ts/testing`).
 
 ```
 OdooClient (high-level typed ops: searchRead, create, write, …)

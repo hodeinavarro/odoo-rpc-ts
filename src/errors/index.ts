@@ -1,7 +1,7 @@
 /**
- * The complete error taxonomy for odoo-rpc-ts. Every failure the client can
- * produce is one of these tagged errors — nothing throws, and there is no
- * blanket error type. See AGENTS.md § Error taxonomy.
+ * The complete error taxonomy for @hodeinavarro/odoo-rpc-ts. Every failure
+ * the client can produce is one of these tagged errors — nothing throws, and
+ * there is no blanket error type. See AGENTS.md § Error taxonomy.
  */
 
 export { OdooTransportError, type RequestInfo } from "./transport.ts";

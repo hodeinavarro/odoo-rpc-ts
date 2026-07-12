@@ -1,8 +1,8 @@
 # Contributing
 
-This is a private, pre-1.0 library consumed by the sibling `private personal project` checkout.
-Keep changes generic: host-app models, workflows, UI, and persistence belong in
-private personal project, while reusable Odoo wire and typed-client behavior belongs here.
+This is a private, pre-1.0 library published to GitHub Packages for private personal project. Keep
+changes generic: host-app models, workflows, UI, and persistence belong in private personal project,
+while reusable Odoo wire and typed-client behavior belongs here.
 
 Read [AGENTS.md](AGENTS.md) before changing protocol behavior. Wire claims must
 be re-verified against the supported Odoo source trees, and protocol changes
@@ -29,7 +29,7 @@ pnpm harness down
 ```
 
 CI runs that suite independently for every supported Odoo major. When a public
-API changes, update and compile-check the README examples, then rebuild the
-sibling dependency from private personal project with `pnpm rpc:build` and run private personal project's gates.
+API changes, update and compile-check the README examples, publish a new package
+version, then update the exact version and run the gates in private personal project.
 
 Do not commit generated `dist/`, harness state, credentials, or package tokens.
