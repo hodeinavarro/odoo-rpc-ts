@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Layer, Option, Ref, Array as Arr } from "effect";
+import { Effect, Exit, Layer, Option, Ref, Array as Arr } from "effect";
 import { GlobalContext, layer as rpcLayer, layerSeeded, layerWith, Rpc } from "../src/rpc.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";
 

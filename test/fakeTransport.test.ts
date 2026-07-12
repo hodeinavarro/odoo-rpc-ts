@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Option, Ref, Array as Arr } from "effect";
+import { Effect, Exit, Option, Ref, Array as Arr } from "effect";
 import { OdooTransportError } from "../src/errors/transport.ts";
 import { Transport } from "../src/transport.ts";
 import * as FakeTransport from "../src/testing/fakeTransport.ts";

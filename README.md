@@ -5,6 +5,24 @@ three wire protocols behind one seam — JSON-RPC, the new JSON-2 API (19+),
 and the cookie-session web route — with a tagged-error taxonomy you can
 `catchTag` instead of parsing messages.
 
+> **Status:** private, pre-1.0, and currently consumed from the sibling checkout
+> in a private personal project. It is not published to a
+> package registry yet.
+
+## Scope
+
+This package owns generic Odoo transport, authentication/session, schema
+decoding, typed records, connection profiles, and a small set of reusable
+services. It does not own private personal project models, UI, persistence, workflow policy, or
+automatic protocol selection. XML-RPC and generated per-model clients are
+deliberately out of scope.
+
+For the current source-checkout workflow, keep this repository beside private personal project and
+run `pnpm rpc:build` from private personal project. For a registry-based private installation, see
+[Private publishing](docs/private-publishing.md).
+
+Once a package is published, consumers install it with:
+
 ```
 pnpm add odoo-rpc-ts effect@4.0.0-beta.93
 pnpm add @effect/platform-node@4.0.0-beta.93   # or run in the browser with FetchHttpClient
@@ -373,5 +391,9 @@ Every example in this README is compile-checked in CI
 
 ## Status
 
-🚧 Pre-1.0. Core is implemented and integration-tested against live Odoo 16
-and 19; the API may still move.
+🚧 Pre-1.0. Core is implemented, the unit suite covers the shared API, and CI
+runs the integration suite against Odoo 16, 17, 18, and 19. The API may still
+move while Effect 4 remains in beta.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the local gates and
+[SECURITY.md](SECURITY.md) for private vulnerability reporting.

@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Cause, Effect, Exit, Layer, Option, Redacted, Array as Arr } from "effect";
+import { Effect, Exit, Layer, Option, Redacted, Array as Arr } from "effect";
 import type { OdooConfig } from "../src/config.ts";
 import { HttpClient, HttpClientResponse } from "../src/internal/platform.ts";
 import { make } from "../src/session/cookie.ts";

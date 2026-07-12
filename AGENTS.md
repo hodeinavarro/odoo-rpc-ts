@@ -28,16 +28,19 @@ protocol code, never against blog posts.
 
 ## Effect-TS is the whole-app paradigm
 
-Target **Effect 3.x** (`effect >= 3.21`). `effect` and `@effect/platform` are
-**peer dependencies** — never hard deps; the consumer owns the Effect
-instance and provides the platform HttpClient layer (fetch/node/bun). Nothing
-throws — every operation returns `Effect<A, E, R>`.
+Target the exact **Effect 4 beta** pinned in `package.json`. `effect` is an
+exact peer dependency — never a hard dependency; the consumer owns the Effect
+instance and provides its platform HttpClient layer (fetch/node/bun). Effect 4
+betas are not semver-stable, so upgrade the peer, dev dependency, README, and
+private personal project together. Nothing throws in operational code — every operation returns
+`Effect<A, E, R>`; declaration/programmer defects may use Effect's defect
+channel.
 
-- **HTTP:** depend only on the abstract `HttpClient` tag from
-  `@effect/platform/HttpClient`. Never import `FetchHttpClient` or a node
-  client outside tests/examples. Build requests with `HttpClientRequest`,
-  decode with `HttpClientResponse.schemaJson`; re-tag `HttpClientError` into
-  our union at the boundary.
+- **HTTP:** depend only on the abstract `HttpClient` service from
+  `effect/unstable/http`, re-exported through `src/internal/platform.ts`.
+  Never import a node client in library source. Build requests with
+  `HttpClientRequest`, decode with `HttpClientResponse.schemaJson`; re-tag
+  `HttpClientError` into our union at the boundary.
 - **Cookies:** the session-cookie mechanism is `Ref<Cookies>` +
   `HttpClient.withCookiesRef` (there is no CookieJar class);
   `Cookies.fromSetCookie` parses the login response.
@@ -46,9 +49,8 @@ throws — every operation returns `Effect<A, E, R>`.
 - **Errors:** wire-decoded faults are `Schema.TaggedError`; purely local
   errors are `Data.TaggedError`. Both `_tag`-discriminated so `catchTag`
   works across the whole union.
-- **Services:** `class Foo extends Context.Tag("odoo-rpc-ts/Foo")<Foo, …>()`
-  - hand-written `Layer`s. Do **not** use `Effect.Service` (experimental,
-    highest-churn surface for the v4 migration).
+- **Services:** extend `Context.Service` with a stable package-qualified key
+  and use hand-written `Layer`s. Keep construction explicit and testable.
 - **Config:** `effect/Config` + `Config.redacted` for secrets;
   `Config.nested`/`Config.all` to build the struct. Library reads `Config`;
   the consumer chooses the `ConfigProvider`. No dotenv.
@@ -57,14 +59,10 @@ throws — every operation returns `Effect<A, E, R>`.
 - **Logging:** Effect `Logger` + `Effect.annotateLogs` wide events.
 - **Orchestration:** `Effect.gen` / `yield*`. Concurrency primitives from
   Effect (`Semaphore`, `Ref`, `Deferred`) — no ad-hoc promises.
-- **Effect 4 decision (2026-07-09): stay on 3.21 stable, structured for the
-  port.** v4 merges platform into core with big perf/bundle wins, but has no
-  3↔4 interop, ~daily breaking betas, no GA date, and its HttpClient lives
-  in permanently semver-exempt `effect/unstable/http`. Port-readiness rules:
-  all `@effect/platform` imports funnel through a single internal module;
-  no experimental APIs (`Effect.Service`) on the public surface; keep Schema
-  filter usage simple (v4 rewrote filters to `.check(…)` combinators).
-  Revisit at v4 GA via the official migration guide/codemod.
+- **Effect 4 decision (2026-07-12): the port is complete.** The package and
+  private personal project both use the same exact beta. All unstable HTTP imports funnel through
+  `src/internal/platform.ts`; keep that choke point and simple Schema checks so
+  beta upgrades remain reviewable. Revisit the pin and APIs at v4 GA.
 
 ## Architecture — protocols, two session styles, one seam
 
@@ -262,11 +260,13 @@ preserved — never dropped, never a thrown string.
   from `@effect/vitest` (not `expect`), `layer(…)` blocks to share a
   `FakeTransport`/mock `HttpClient` layer across a describe. Wire-level
   tests decode captured fixtures per Odoo version.
-- **Integration:** The checked-in Docker harness runs disposable Odoo instances for supported versions; unit tests never require Docker.
+- **Integration:** the checked-in Docker harness runs a disposable seeded
+  Odoo for each supported version. `pnpm harness up <16.0|17.0|18.0|19.0>`,
+  then `pnpm test:integration`; `pnpm harness down` tears it down. CI runs the
+  four-version matrix independently; unit tests never require Docker.
 - **Package:** ESM-only, `"type": "module"`, pnpm. `exports` map with a
-  `./testing` entry point. `effect` + `@effect/platform` in
-  `peerDependencies` (and devDependencies for development), platform
-  implementations only in devDependencies.
+  `./testing` entry point. Exact `effect` beta in `peerDependencies` and
+  devDependencies; platform implementations only in devDependencies.
 
 ## Formatting & commits
 
@@ -276,7 +276,8 @@ preserved — never dropped, never a thrown string.
 
 ## Invariants — do not regress
 
-- Nothing throws; all failures are tagged errors in the `Effect` fail channel.
+- Operational failures are tagged errors in the `Effect` fail channel;
+  impossible declaration/programmer states may become explicit defects.
 - Distinct `_tag` per fault subtype; upper layers never parse messages;
   unknown faults preserved, not swallowed.
 - All three protocols normalize into the **same** error union at one choke
@@ -286,6 +287,6 @@ preserved — never dropped, never a thrown string.
 - TLS never disabled; secrets always `Redacted`; API keys never in URLs or logs.
 - Auth/uid/version/session caches are success-only single-flight (never
   `Effect.cached`).
-- No `Effect.Service`, no enums/namespaces (`erasableSyntaxOnly`), ESM only.
+- No enums/namespaces (`erasableSyntaxOnly`); ESM only.
 - Wire behavior claims in this file change only with a source-verified
   citation from the Odoo trees.

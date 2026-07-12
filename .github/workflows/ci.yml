@@ -5,25 +5,40 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit:
-    name: unit
-    runs-on: ubuntu-latest
+    name: check, test, pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          node-version: 22
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 26
           cache: pnpm
+
+      - name: Install pnpm
+        run: |
+          npm install --global pnpm@11.12.0 --ignore-scripts
+          test "$(pnpm --version)" = "11.12.0"
 
       # minimumReleaseAge (pnpm's supply-chain cooldown) can refuse freshly
       # published versions in the lockfile on CI; --config.minimumReleaseAge=0
       # disables the cooldown for this deterministic, frozen-lockfile install.
       - name: Install
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+        run: pnpm install --frozen-lockfile --ignore-scripts --config.minimumReleaseAge=0
 
       - name: Typecheck
         run: pnpm check
@@ -34,25 +49,36 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: Build and inspect package
+        run: pnpm pack --dry-run
+
   integration:
     name: integration (${{ matrix.version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         version: ["16.0", "17.0", "18.0", "19.0"]
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          node-version: 22
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 26
           cache: pnpm
 
+      - name: Install pnpm
+        run: |
+          npm install --global pnpm@11.12.0 --ignore-scripts
+          test "$(pnpm --version)" = "11.12.0"
+
       - name: Install
-        run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
+        run: pnpm install --frozen-lockfile --ignore-scripts --config.minimumReleaseAge=0
 
       - name: Bring up the Odoo ${{ matrix.version }} harness
         run: pnpm harness up ${{ matrix.version }}
