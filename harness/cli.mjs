@@ -14,7 +14,7 @@
 // `up` is idempotent: on an already-running, already-seeded stack it is a no-op that
 // just prints the state file path.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,8 @@ const STATE_ROOT = join(HERE, ".state");
 const SEED = join(HERE, "seed.py");
 
 const SUPPORTED = ["16.0", "17.0", "18.0", "19.0"];
+const APPLICATIONS = ["account", "crm", "project", "purchase", "sale_management", "stock"];
+const PROFILE = "applications-demo-v2";
 
 function assertVersion(v) {
   if (!SUPPORTED.includes(v)) {
@@ -111,6 +113,34 @@ function dbInitialised(c) {
   return out === "1";
 }
 
+function applicationProfileReady(c) {
+  const names = APPLICATIONS.map((name) => `'${name}'`).join(",");
+  const out = dcCapture(
+    c,
+    [
+      "exec",
+      "-T",
+      "db",
+      "psql",
+      "-U",
+      c.env.ODOO_HARNESS_DB_USER,
+      "-d",
+      c.db,
+      "-tAc",
+      `SELECT count(*) FROM ir_module_module WHERE name IN (${names}) AND state='installed' AND demo IS TRUE`,
+    ],
+    { soft: true },
+  );
+  return out === String(APPLICATIONS.length);
+}
+
+function stateReady(c) {
+  return (
+    existsSync(c.stateFile) &&
+    readFileSync(c.stateFile, "utf8").includes(`ODOO_HARNESS_PROFILE=${PROFILE}\n`)
+  );
+}
+
 function requireDocker() {
   try {
     execFileSync("docker", ["version", "--format", "{{.Server.Version}}"], {
@@ -128,19 +158,14 @@ function up(version) {
   requireDocker();
   const c = ctx(version);
 
-  if (existsSync(c.stateFile) && odooRunning(c)) {
-    console.log(`harness: ${version} already up and seeded.`);
-    console.log(`  state: ${c.stateFile}`);
-    console.log(`  url:   http://localhost:${c.port}`);
-    return;
-  }
-
   console.log(`harness: building/starting db for ${version} (project odoo-rpc-ts-${c.major})…`);
   // Bring up db first so we can probe/init before serving.
   dc(c, ["up", "-d", "--build", "db"]);
 
   if (!dbInitialised(c)) {
-    console.log(`harness: initialising db "${c.db}" (base,web, no demo)…`);
+    console.log(
+      `harness: initialising db "${c.db}" with application demos (${APPLICATIONS.join(",")})…`,
+    );
     dc(c, [
       "run",
       "--rm",
@@ -152,15 +177,28 @@ function up(version) {
       "-d",
       c.db,
       "-i",
-      "base,web",
+      APPLICATIONS.join(","),
       "--stop-after-init",
-      "--without-demo=all",
     ]);
+  } else if (!applicationProfileReady(c)) {
+    fail(
+      `db "${c.db}" is not the application-demo profile. Run ` +
+        `"pnpm harness reset ${version}" once, then retry; existing volumes are never migrated implicitly.`,
+    );
+  } else if (stateReady(c) && odooRunning(c)) {
+    console.log(`harness: ${version} already up, application demos verified, and seeded.`);
+    console.log(`  state: ${c.stateFile}`);
+    console.log(`  url:   http://localhost:${c.port}`);
+    return;
   } else {
-    console.log(`harness: db "${c.db}" already initialised — skipping init.`);
+    console.log(`harness: db "${c.db}" application-demo profile verified — skipping init.`);
   }
 
-  if (!existsSync(c.stateFile)) {
+  if (!applicationProfileReady(c)) {
+    fail(`db "${c.db}" initialised but the application-demo profile could not be verified.`);
+  }
+
+  if (!stateReady(c)) {
     console.log(`harness: seeding rpc user + API key…`);
     // The bind-mounted seeder runs as the image's `odoo` user, not as the host
     // caller. Let it create the per-version directory, then close the shared
@@ -255,7 +293,7 @@ function status() {
   for (const version of SUPPORTED) {
     const c = ctx(version);
     const running = odooRunning(c) ? "yes" : "no ";
-    const seeded = existsSync(c.stateFile) ? "yes" : "no ";
+    const seeded = stateReady(c) ? "yes" : "no ";
     console.log(
       `${version.padEnd(8)} ${running.padEnd(8)} ${seeded.padEnd(7)} http://localhost:${c.port}`,
     );

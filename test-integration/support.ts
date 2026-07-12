@@ -60,6 +60,28 @@ export const passwordConfig = (): OdooConfig => ({
   },
 });
 
+/** Valid API-key credentials for the plain internal user with no application groups. */
+export const restrictedApiKeyConfig = (): OdooConfig => ({
+  url: url(),
+  db: env("ODOO_DB"),
+  credentials: {
+    _tag: "ApiKey",
+    username: env("ODOO_RESTRICTED_USERNAME"),
+    apiKey: Redacted.make(env("ODOO_RESTRICTED_API_KEY")),
+  },
+});
+
+/** Valid password credentials for the plain internal user with no application groups. */
+export const restrictedPasswordConfig = (): OdooConfig => ({
+  url: url(),
+  db: env("ODOO_DB"),
+  credentials: {
+    _tag: "Password",
+    username: env("ODOO_RESTRICTED_USERNAME"),
+    password: Redacted.make(env("ODOO_RESTRICTED_PASSWORD")),
+  },
+});
+
 /** An API-key config carrying a deliberately wrong key (auth-failure specs). */
 export const badApiKeyConfig = (): OdooConfig => ({
   ...apiKeyConfig(),

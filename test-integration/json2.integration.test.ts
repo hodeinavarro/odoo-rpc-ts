@@ -22,6 +22,7 @@ import {
   hasStack,
   majorVersion,
   marker,
+  restrictedApiKeyConfig,
   TIMEOUT_MS,
 } from "./support.ts";
 
@@ -74,6 +75,22 @@ describe.skipIf(!enabled)("json2 (live, Odoo 19+)", () => {
         const error = yield* client.searchCount("res.partner", []).pipe(Effect.flip);
         assert.strictEqual(error._tag, "OdooAuthenticationError");
       }).pipe(Effect.provide(appLayer(badApiKeyConfig()))),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!enabled)(
+    "valid restricted bearer → OdooAccessError for sale.order.create",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* OdooClient;
+        const error = yield* client.create("sale.order", { partner_id: 1 }).pipe(Effect.flip);
+        assert.strictEqual(error._tag, "OdooAccessError");
+        if (error._tag === "OdooAccessError") {
+          assert.strictEqual(error.name, "odoo.exceptions.AccessError");
+          assert.strictEqual(error.model, "sale.order");
+          assert.strictEqual(error.method, "create");
+        }
+      }).pipe(Effect.provide(appLayer(restrictedApiKeyConfig()))),
     TIMEOUT_MS,
   );
 

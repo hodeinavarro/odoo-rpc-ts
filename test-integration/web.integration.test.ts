@@ -15,7 +15,14 @@ import {
   WebTransport,
   retryOnSessionExpired,
 } from "../src/index.ts";
-import { badPasswordConfig, hasStack, marker, passwordConfig, TIMEOUT_MS } from "./support.ts";
+import {
+  badPasswordConfig,
+  hasStack,
+  marker,
+  passwordConfig,
+  restrictedPasswordConfig,
+  TIMEOUT_MS,
+} from "./support.ts";
 
 /** Just the cookie session (login-only specs). */
 const sessionLayer = (config = passwordConfig()): Layer.Layer<CookieSession> =>
@@ -110,6 +117,24 @@ describe.skipIf(!hasStack)("web (live)", () => {
           assert.strictEqual(untouched[0]?.["ref"], `${name}-ref`);
         }).pipe(Effect.ensuring(client.unlink("res.partner", ids).pipe(Effect.ignore)));
       }).pipe(Effect.provide(appLayer())),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!hasStack)(
+    "valid restricted session → OdooAccessError for sale.order.create",
+    () =>
+      Effect.gen(function* () {
+        const session = yield* CookieSession;
+        yield* session.login;
+        const client = yield* OdooClient;
+        const error = yield* client.create("sale.order", { partner_id: 1 }).pipe(Effect.flip);
+        assert.strictEqual(error._tag, "OdooAccessError");
+        if (error._tag === "OdooAccessError") {
+          assert.strictEqual(error.name, "odoo.exceptions.AccessError");
+          assert.strictEqual(error.model, "sale.order");
+          assert.strictEqual(error.method, "create");
+        }
+      }).pipe(Effect.provide(appLayer(restrictedPasswordConfig()))),
     TIMEOUT_MS,
   );
 

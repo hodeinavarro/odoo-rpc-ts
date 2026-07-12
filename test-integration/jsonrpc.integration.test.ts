@@ -20,6 +20,7 @@ import {
   hasStack,
   majorVersion,
   marker,
+  restrictedApiKeyConfig,
   TIMEOUT_MS,
 } from "./support.ts";
 
@@ -133,6 +134,27 @@ describe.skipIf(!hasStack)("jsonrpc (live)", () => {
           .pipe(Effect.flip);
         assert.strictEqual(error._tag, "OdooAccessError");
       }).pipe(Effect.provide(appLayer())),
+    TIMEOUT_MS,
+  );
+
+  it.live.skipIf(!hasStack)(
+    "valid restricted credentials → OdooAccessError for sale.order.create",
+    () =>
+      Effect.gen(function* () {
+        const client = yield* OdooClient;
+        const partners = yield* client.searchRead("res.partner", { fields: ["id"], limit: 1 });
+        assert.strictEqual(partners.length, 1);
+
+        const error = yield* client
+          .create("sale.order", { partner_id: partners[0]?.["id"] })
+          .pipe(Effect.flip);
+        assert.strictEqual(error._tag, "OdooAccessError");
+        if (error._tag === "OdooAccessError") {
+          assert.strictEqual(error.name, "odoo.exceptions.AccessError");
+          assert.strictEqual(error.model, "sale.order");
+          assert.strictEqual(error.method, "create");
+        }
+      }).pipe(Effect.provide(appLayer(restrictedApiKeyConfig()))),
     TIMEOUT_MS,
   );
 
