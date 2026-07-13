@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import type { FaultCallSite } from "../errors/mapFault.ts";
 import { mapServerFault, type RawServerFault } from "../errors/mapFault.ts";
 import { OdooServerError, type OdooServerFault } from "../errors/server.ts";
@@ -75,12 +75,32 @@ export const JsonRpcErrorResponse = Schema.Struct({
 });
 export type JsonRpcErrorResponse = typeof JsonRpcErrorResponse.Type;
 
-/** A JSON-RPC success response: `{jsonrpc, id?, result}` (result is opaque). */
-export const JsonRpcSuccessResponse = Schema.Struct({
+/**
+ * A JSON-RPC success response: `{jsonrpc, id?, result?}` (result is opaque).
+ *
+ * Odoo 16 and 17 omit the member entirely when a Python method returns
+ * `None`. Decode that wire quirk to an explicit `undefined`, so consumers have
+ * one stable successful-response shape.
+ */
+const JsonRpcResultSuccessResponse = Schema.Struct({
   jsonrpc: Schema.Literal("2.0"),
   id: Schema.optional(JsonRpcId),
   result: Schema.Unknown,
+  error: Schema.optionalKey(Schema.Never),
 });
+
+const JsonRpcVoidSuccessResponse = Schema.Struct({
+  jsonrpc: Schema.Literal("2.0"),
+  id: JsonRpcId,
+  result: Schema.Unknown.pipe(Schema.withDecodingDefaultTypeKey(Effect.void)),
+  // Declare this forbidden member so malformed error envelopes cannot fall
+  // through to the missing-result success shape in the union below.
+  error: Schema.optionalKey(Schema.Never),
+});
+export const JsonRpcSuccessResponse = Schema.Union([
+  JsonRpcResultSuccessResponse,
+  JsonRpcVoidSuccessResponse,
+]);
 export type JsonRpcSuccessResponse = typeof JsonRpcSuccessResponse.Type;
 
 /**

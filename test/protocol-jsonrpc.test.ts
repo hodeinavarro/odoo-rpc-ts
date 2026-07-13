@@ -45,6 +45,17 @@ describe("JsonRpcResponse schema", () => {
     }),
   );
 
+  it.effect("decodes an Odoo 16/17 void success with result undefined", () =>
+    Effect.gen(function* () {
+      yield* Effect.void;
+      const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)({
+        jsonrpc: "2.0",
+        id: 1,
+      });
+      assert.deepStrictEqual(decoded, { jsonrpc: "2.0", id: 1, result: undefined });
+    }),
+  );
+
   it.effect("decodes an error envelope", () =>
     Effect.gen(function* () {
       yield* Effect.void;
@@ -73,7 +84,21 @@ describe("JsonRpcResponse schema", () => {
     Effect.gen(function* () {
       yield* Effect.void;
       assert.isTrue(decode({ foo: "bar" })._tag === "Failure");
+      assert.isTrue(decode({ jsonrpc: "2.0" })._tag === "Failure");
       assert.isTrue(decode(42)._tag === "Failure");
+    }),
+  );
+
+  it.effect("rejects an error-shaped response with an invalid error payload", () =>
+    Effect.gen(function* () {
+      yield* Effect.void;
+      assert.isTrue(
+        decode({
+          jsonrpc: "2.0",
+          id: 1,
+          error: { code: "not-a-number", message: "boom" },
+        })._tag === "Failure",
+      );
     }),
   );
 });

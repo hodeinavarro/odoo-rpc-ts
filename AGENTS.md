@@ -112,8 +112,10 @@ context, mirroring the web client), success-only single-flight caching
 - Services: `common` (`login`, `authenticate(db,login,password,user_agent_env)`,
   `version`), `object` (`execute_kw(db, uid, password, model, method, args,
 kwargs)`), `db`.
-- Success `{jsonrpc, id, result}`. Error `{jsonrpc, id, error:{code, message,
-data}}` with `code` almost always `200` ("Odoo Server Error"), `404` for
+- Success `{jsonrpc, id, result}`; when the dispatched method returns `None`,
+  Odoo omits `result`, so `{jsonrpc, id}` is a successful void response. Error
+  `{jsonrpc, id, error:{code, message, data}}` uses `code` almost always `200`
+  ("Odoo Server Error"), `404` for
   NotFound, **`100` for session expiry**. Real discrimination lives in
   `error.data` = `{name, debug, message, arguments, context}` where `name` is
   the dotted Python class (`odoo.exceptions.UserError`, …). Map on
