@@ -4,7 +4,7 @@
  * there is no blanket error type. See AGENTS.md § Error taxonomy.
  */
 
-export { OdooTransportError, type RequestInfo } from "./transport.ts";
+export { OdooTransportError, type RequestInfo, type TransportErrorKind } from "./transport.ts";
 export { OdooAuthenticationError, type OdooAuthReason } from "./auth.ts";
 export { SessionExpiredError } from "./session.ts";
 export { SchemaDriftError } from "./schema.ts";

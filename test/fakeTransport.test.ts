@@ -39,7 +39,7 @@ describe("FakeTransport", () => {
     Effect.gen(function* () {
       const boom = new OdooTransportError({
         request: { method: "POST", url: "https://odoo.test/jsonrpc" },
-        cause: undefined as never,
+        kind: "TransportError",
       });
       const fake = FakeTransport.make({
         "res.users": {

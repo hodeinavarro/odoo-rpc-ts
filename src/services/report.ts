@@ -2,7 +2,6 @@ import { Effect, Result, Schema } from "effect";
 import { OdooAccessError, OdooMissingError } from "../errors/server.ts";
 import { SchemaDriftError } from "../errors/schema.ts";
 import { OdooTransportError, type RequestInfo } from "../errors/transport.ts";
-import { HttpClientError } from "../internal/platform.ts";
 import type { CookieLoginError, CookieSessionService } from "../session/cookie.ts";
 
 /**
@@ -129,26 +128,17 @@ export const download = (
     }
 
     if (response.status < 200 || response.status >= 300) {
-      // The unknown-report 500 lands here: a real StatusCode ResponseError so
-      // the OdooTransportError carries a well-formed HttpClientError cause.
       return yield* Effect.fail(
         new OdooTransportError({
           request,
-          // v4 wraps the concrete reason (StatusCodeError) in the
-          // HttpClientError carrier class.
-          cause: new HttpClientError.HttpClientError({
-            reason: new HttpClientError.StatusCodeError({
-              request: response.request,
-              response,
-              description: `unexpected status ${response.status} downloading report ${options.reportName}`,
-            }),
-          }),
+          kind: "StatusCodeError",
+          status: response.status,
         }),
       );
     }
 
     const buffer = yield* response.arrayBuffer.pipe(
-      Effect.mapError((cause) => new OdooTransportError({ request, cause })),
+      Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)),
     );
     const bytes = new Uint8Array(buffer);
 

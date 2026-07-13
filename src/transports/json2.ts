@@ -38,7 +38,7 @@ const requestInfo = (url: string, method: string): RequestInfo => ({ method, url
 const toTransportError =
   (request: RequestInfo) =>
   (cause: HttpClientErrorType): OdooTransportError =>
-    new OdooTransportError({ request, cause });
+    OdooTransportError.fromHttpClientError(request, cause);
 
 /**
  * The `serialize_exception` payload Odoo returns in an error body. Everything is
@@ -88,8 +88,8 @@ const byStatus: Record<number, new (fields: RawServerFault & FaultCallSite) => O
  * exactly one tagged error:
  *
  * - `400` / `415` are transport-shaped (malformed request / wrong media type),
- *   so they map to {@link OdooTransportError} carrying the platform
- *   `ResponseError` as `cause`.
+ *   so they map to {@link OdooTransportError} with sanitized response-error
+ *   metadata.
  * - Any body with a Python `name` goes through {@link mapServerFault} (shared
  *   with the other transports), so `AccessDenied` correctly becomes an auth
  *   error and known exception names get their subtype.
@@ -105,12 +105,12 @@ const mapJson2Fault = (
     const status = response.status;
 
     if (status === 400 || status === 415) {
-      // A genuine platform ResponseError is required as `cause`; `filterStatusOk`
-      // manufactures one from the non-ok status without reading the body.
+      // `filterStatusOk` manufactures a response error from the non-ok status
+      // without reading the body; the public error retains only safe metadata.
       const cause = yield* Effect.flip(HttpClientResponse.filterStatusOk(response)).pipe(
         Effect.orDie,
       );
-      return yield* Effect.fail(new OdooTransportError({ request, cause }));
+      return yield* Effect.fail(OdooTransportError.fromHttpClientError(request, cause));
     }
 
     // A non-JSON or shape-drifted error body falls back to an empty exception,
@@ -290,7 +290,7 @@ export const probeJson2Version = (
       const cause = yield* Effect.flip(HttpClientResponse.filterStatusOk(response)).pipe(
         Effect.orDie,
       );
-      return yield* Effect.fail(new OdooTransportError({ request: info, cause }));
+      return yield* Effect.fail(OdooTransportError.fromHttpClientError(info, cause));
     }
 
     const payload = yield* response.json.pipe(Effect.mapError(toTransportError(info)));

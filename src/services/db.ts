@@ -80,8 +80,8 @@ const dbCall = (
 
     const payload: unknown = yield* client.execute(request).pipe(
       Effect.flatMap((response) => response.json),
-      Effect.mapError(
-        (cause) => new OdooTransportError({ request: { method: "POST", url: endpoint }, cause }),
+      Effect.mapError((cause) =>
+        OdooTransportError.fromHttpClientError({ method: "POST", url: endpoint }, cause),
       ),
     );
 

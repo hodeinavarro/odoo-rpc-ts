@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Redacted } from "effect";
+import { Cause, ConfigProvider, Effect, Redacted } from "effect";
 import { OdooConfig } from "../src/config.ts";
 
 // v4: providers install per-parse (Config.parse) instead of Effect.withConfigProvider;
@@ -65,6 +65,30 @@ describe("OdooConfig", () => {
         }),
       );
       assert.strictEqual(exit._tag, "Failure");
+    }),
+  );
+
+  it.effect("rejects secret-bearing URL components without echoing their values", () =>
+    Effect.gen(function* () {
+      const secretUrl =
+        "https://url-user:url-password@erp.example.com?access_token=query-secret#fragment-secret";
+      const exit = yield* Effect.exit(
+        load({
+          "ODOO_URL": secretUrl,
+          "ODOO_DB": "prod",
+          "ODOO_USERNAME": "svc",
+          "ODOO_API_KEY": "k",
+        }),
+      );
+
+      assert.strictEqual(exit._tag, "Failure");
+      if (exit._tag === "Failure") {
+        const rendered = `${Cause.pretty(exit.cause)} ${JSON.stringify(exit.cause)}`;
+        assert.notInclude(rendered, "url-user");
+        assert.notInclude(rendered, "url-password");
+        assert.notInclude(rendered, "query-secret");
+        assert.notInclude(rendered, "fragment-secret");
+      }
     }),
   );
 

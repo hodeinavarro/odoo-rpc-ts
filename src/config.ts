@@ -29,9 +29,10 @@ export interface OdooConfig {
 }
 
 /**
- * A config validation failure on the offending raw value. v4's `ConfigError`
- * wraps a `SchemaError` (data found but invalid) — the analogue of v3's
- * `ConfigError.InvalidData`.
+ * A config validation failure carrying a caller-selected diagnostic value.
+ * Secret-bearing inputs must pass a fixed redacted placeholder. v4's
+ * `ConfigError` wraps a `SchemaError` (data found but invalid) — the analogue
+ * of v3's `ConfigError.InvalidData`.
  */
 const invalidData = (value: unknown, message: string): Config.ConfigError =>
   new Config.ConfigError(
@@ -39,16 +40,26 @@ const invalidData = (value: unknown, message: string): Config.ConfigError =>
   );
 
 /**
- * Parse and validate the `ODOO_URL` value: must be a well-formed absolute URL,
- * and must be `https` unless it targets localhost / a loopback address. TLS is
- * never silently disabled.
+ * Parse and validate the `ODOO_URL` value: must be a well-formed absolute URL
+ * without userinfo, query parameters, or a fragment, and must be `https`
+ * unless it targets localhost / a loopback address. TLS is never silently
+ * disabled.
  */
 const parseUrl = (raw: string): Effect.Effect<URL, Config.ConfigError> => {
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return Effect.fail(invalidData(raw, `Not a valid URL: ${raw}`));
+    return Effect.fail(invalidData("<redacted>", "ODOO_URL is not a valid absolute URL"));
+  }
+
+  if (url.username !== "" || url.password !== "" || url.search !== "" || url.hash !== "") {
+    return Effect.fail(
+      invalidData(
+        "<redacted>",
+        "ODOO_URL must not contain userinfo, query parameters, or a fragment",
+      ),
+    );
   }
 
   const isLoopback =
@@ -59,7 +70,7 @@ const parseUrl = (raw: string): Effect.Effect<URL, Config.ConfigError> => {
 
   if (url.protocol !== "https:" && !isLoopback) {
     return Effect.fail(
-      invalidData(raw, `Refusing non-https URL to a non-localhost host: ${raw}`),
+      invalidData("<redacted>", "ODOO_URL must use https unless it targets a loopback host"),
     );
   }
 

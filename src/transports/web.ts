@@ -50,10 +50,10 @@ export const make = (
 
         const response = yield* session.client
           .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(callUrl), envelope))
-          .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+          .pipe(Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)));
 
         const body = yield* response.json.pipe(
-          Effect.mapError((cause) => new OdooTransportError({ request, cause })),
+          Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)),
         );
 
         const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(

@@ -145,10 +145,10 @@ const sessionInfoRoundTrip = (
 
     const response = yield* client
       .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(url), envelope))
-      .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+      .pipe(Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)));
 
     const body = yield* response.json.pipe(
-      Effect.mapError((cause) => new OdooTransportError({ request, cause })),
+      Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)),
     );
 
     const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(
@@ -222,10 +222,10 @@ const makeRawHatches = (
 
       const response = yield* client
         .execute(HttpClientRequest.bodyJsonUnsafe(HttpClientRequest.post(url), envelope))
-        .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+        .pipe(Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)));
 
       const body = yield* response.json.pipe(
-        Effect.mapError((cause) => new OdooTransportError({ request, cause })),
+        Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)),
       );
 
       const decoded = yield* Schema.decodeUnknownEffect(JsonRpcResponse)(body).pipe(
@@ -262,7 +262,7 @@ const makeRawHatches = (
       // Response returned untouched — the caller owns any non-2xx status.
       return yield* client
         .execute(req)
-        .pipe(Effect.mapError((cause) => new OdooTransportError({ request, cause })));
+        .pipe(Effect.mapError((cause) => OdooTransportError.fromHttpClientError(request, cause)));
     });
 
   return { json, http };
