@@ -26,6 +26,15 @@ The seeded state file (`harness/.state/<version>/env`, gitignored) contains:
 `ODOO_HARNESS_VERSION`, and `ODOO_HARNESS_PROFILE`. API keys are captured only
 at generation. The restricted user belongs only to `base.group_user`, allowing
 integration specs to distinguish authentication failures from ACL denials.
+The state root and per-version directories are owner-only (`0700`); the generated
+state file is owner-readable only (`0600`). The seeding container never mounts that
+directory: it emits an opaque, captured handoff that the CLI validates without
+logging, then the host process creates the directory and file. This keeps the state
+readable by the invoking host user on native Linux without weakening its at-rest
+permissions. The Odoo HTTP port is bound to `127.0.0.1` only.
+If an older native-Linux state directory is still owned by the container user, the
+CLI reports the migration explicitly: remove that disposable version directory or
+repair its ownership with sufficient privileges, then retry.
 
 db credentials are templated into `odoo.conf` at container start via `envsubst`
 (from the compose `environment:` block) — not hardcoded.

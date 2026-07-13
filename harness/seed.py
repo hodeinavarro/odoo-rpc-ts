@@ -1,24 +1,28 @@
 # Harness seed — runs inside `odoo shell` after the application-demo profile is installed.
-# Idempotently provisions two integration principals and emits a .env state file:
+# Idempotently provisions two integration principals and emits their state:
 #   - user "rpc" (login rpc / password rpc-integration), in base.group_system so
 #     client ops on res.partner et al. work; no 2FA, so password auth works too.
 #   - user "rpc-restricted", in base.group_user only, for real ACL-denial specs.
 #   - a global (scope=None) API key for each user — satisfies scope='rpc' checks
 #     on 16/17 AND the JSON-2 bearer path on 19.
 #
-# The generated key is returned ONLY at creation time, so we write it immediately to
-# a mounted host dir: /harness-state/<version>/env (bind of harness/.state/<version>).
+# The generated key is returned ONLY at creation time. Stdout is reserved for one
+# base64 state marker consumed by the host CLI; progress goes to stderr. The host
+# validates the payload and writes it with host ownership and owner-only permissions.
 #
 # `odoo shell` exposes `env` (and `self`). We commit explicitly since shell scripts
 # run in a transaction that is rolled back unless committed.
+import base64
 import inspect
 import os
+import sys
 
 LOGIN = "rpc"
 PASSWORD = "rpc-integration"
 RESTRICTED_LOGIN = "rpc-restricted"
 RESTRICTED_PASSWORD = "rpc-restricted-integration"
 KEY_NAME = "odoo-rpc-ts integration"
+STATE_MARKER = "ODOO_RPC_TS_HARNESS_STATE_V1:"
 
 version = os.environ["ODOO_HARNESS_VERSION"]
 db = os.environ["ODOO_HARNESS_DB"]
@@ -26,7 +30,6 @@ port = os.environ["ODOO_HARNESS_PORT"]
 # Master password gating db-management ops (templated into odoo.conf). Default
 # "master" mirrors the compose/cli default; recorded so the db suite can use it.
 master_password = os.environ.get("ODOO_HARNESS_MASTER_PASSWORD", "master")
-state_dir = os.environ.get("ODOO_HARNESS_STATE_DIR", "/harness-state")
 
 Users = env["res.users"].sudo()
 group_system = env.ref("base.group_system")
@@ -62,10 +65,13 @@ def ensure_user(login, password, name, groups, replace_groups=False):
                 groups_field: [(6, 0, groups)],
             }
         )
-        print(f"harness-seed: created user {login} (id={user.id})")
+        print(f"harness-seed: created user {login} (id={user.id})", file=sys.stderr)
     else:
         user.write({"password": password, groups_field: group_command})
-        print(f"harness-seed: user {login} already exists — ensured groups/password")
+        print(
+            f"harness-seed: user {login} already exists — ensured groups/password",
+            file=sys.stderr,
+        )
     return user
 
 
@@ -100,14 +106,11 @@ def generate_api_key(key_user, name):
 
 api_key = generate_api_key(user, KEY_NAME)
 restricted_api_key = generate_api_key(restricted_user, f"{KEY_NAME} restricted")
-print("harness-seed: generated API keys")
+print("harness-seed: generated API keys", file=sys.stderr)
 
 env.cr.commit()
 
-# --- state file --------------------------------------------------------------
-out_dir = os.path.join(state_dir, version)
-os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, "env")
+# --- state handoff -----------------------------------------------------------
 lines = [
     f"ODOO_URL=http://localhost:{port}",
     f"ODOO_DB={db}",
@@ -122,7 +125,5 @@ lines = [
     "ODOO_HARNESS_PROFILE=applications-demo-v2",
     "",
 ]
-with open(out_path, "w") as fh:
-    fh.write("\n".join(lines))
-
-print(f"harness-seed: wrote state file {out_path}")
+payload = base64.b64encode("\n".join(lines).encode()).decode("ascii")
+print(f"{STATE_MARKER}{payload}")

@@ -51,8 +51,9 @@ services:
       # Master password gating db-management ops; templated into odoo.conf.
       ODOO_HARNESS_MASTER_PASSWORD: ${ODOO_HARNESS_MASTER_PASSWORD:-master}
     ports:
-      # Host port keyed by major (8016/8017/8018/8019) → two versions coexist.
-      - "${ODOO_HARNESS_PORT:-8016}:8069"
+      # Loopback-only host port keyed by major (8016/8017/8018/8019) → two
+      # versions coexist without exposing this disposable, weakly secured Odoo.
+      - "127.0.0.1:${ODOO_HARNESS_PORT:-8016}:8069"
     volumes:
       - odoo-data:/var/lib/odoo
       - ./odoo.conf:/etc/odoo/odoo.conf.template:ro

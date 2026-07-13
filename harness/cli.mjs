@@ -14,7 +14,15 @@
 // `up` is idempotent: on an already-running, already-seeded stack it is a no-op that
 // just prints the state file path.
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +30,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const COMPOSE = join(HERE, "compose.yaml");
 const STATE_ROOT = join(HERE, ".state");
 const SEED = join(HERE, "seed.py");
+const STATE_MARKER = "ODOO_RPC_TS_HARNESS_STATE_V1:";
 
 const SUPPORTED = ["16.0", "17.0", "18.0", "19.0"];
 const APPLICATIONS = ["account", "crm", "project", "purchase", "sale_management", "stock"];
@@ -135,10 +144,133 @@ function applicationProfileReady(c) {
 }
 
 function stateReady(c) {
-  return (
-    existsSync(c.stateFile) &&
-    readFileSync(c.stateFile, "utf8").includes(`ODOO_HARNESS_PROFILE=${PROFILE}\n`)
-  );
+  return withStatePermissionDiagnostic(c, () => {
+    secureStatePermissions(c);
+    return (
+      existsSync(c.stateFile) &&
+      readFileSync(c.stateFile, "utf8").includes(`ODOO_HARNESS_PROFILE=${PROFILE}\n`)
+    );
+  });
+}
+
+function withStatePermissionDiagnostic(c, operation) {
+  try {
+    return operation();
+  } catch (error) {
+    if (error?.code === "EACCES" || error?.code === "EPERM") {
+      fail(
+        `legacy harness state at "${c.stateDir}" is not accessible to this host user. ` +
+          "It may have been created by the old container-owned layout. With sufficient " +
+          "privileges, remove this disposable directory or repair its ownership, then retry.",
+      );
+    }
+    throw error;
+  }
+}
+
+function removeState(c) {
+  withStatePermissionDiagnostic(c, () => {
+    rmSync(c.stateDir, { recursive: true, force: true });
+  });
+}
+
+/** State contains generated credentials: directories are owner-only, files 0600. */
+function secureStatePermissions(c) {
+  for (const [path, mode] of [
+    [STATE_ROOT, 0o700],
+    [c.stateDir, 0o700],
+    [c.stateFile, 0o600],
+  ]) {
+    if (existsSync(path) && (statSync(path).mode & 0o7777) !== mode) {
+      chmodSync(path, mode);
+    }
+  }
+}
+
+function decodeSeedState(output, c) {
+  const markers = output.split(/\r?\n/).filter((line) => line.startsWith(STATE_MARKER));
+  if (markers.length !== 1) {
+    throw new Error("seed output did not contain exactly one state marker");
+  }
+
+  const encoded = markers[0].slice(STATE_MARKER.length);
+  if (
+    encoded.length === 0 ||
+    encoded.length % 4 !== 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)
+  ) {
+    throw new Error("seed state marker was not canonical base64");
+  }
+
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.toString("base64") !== encoded) {
+    throw new Error("seed state marker was not canonical base64");
+  }
+  const state = bytes.toString("utf8");
+  if (!Buffer.from(state, "utf8").equals(bytes)) {
+    throw new Error("seed state marker was not UTF-8");
+  }
+
+  const expectedKeys = [
+    "ODOO_URL",
+    "ODOO_DB",
+    "ODOO_USERNAME",
+    "ODOO_PASSWORD",
+    "ODOO_API_KEY",
+    "ODOO_RESTRICTED_USERNAME",
+    "ODOO_RESTRICTED_PASSWORD",
+    "ODOO_RESTRICTED_API_KEY",
+    "ODOO_MASTER_PASSWORD",
+    "ODOO_HARNESS_VERSION",
+    "ODOO_HARNESS_PROFILE",
+  ];
+  const lines = state.split("\n");
+  if (lines.length !== expectedKeys.length + 1 || lines.at(-1) !== "") {
+    throw new Error("seed state payload had an unexpected shape");
+  }
+
+  const values = new Map();
+  for (const [index, key] of expectedKeys.entries()) {
+    const prefix = `${key}=`;
+    const line = lines[index];
+    if (!line.startsWith(prefix)) {
+      throw new Error("seed state payload had an unexpected shape");
+    }
+    values.set(key, line.slice(prefix.length));
+  }
+
+  const expectedValues = new Map([
+    ["ODOO_URL", `http://localhost:${c.port}`],
+    ["ODOO_DB", c.db],
+    ["ODOO_USERNAME", "rpc"],
+    ["ODOO_PASSWORD", "rpc-integration"],
+    ["ODOO_RESTRICTED_USERNAME", "rpc-restricted"],
+    ["ODOO_RESTRICTED_PASSWORD", "rpc-restricted-integration"],
+    ["ODOO_MASTER_PASSWORD", c.env.ODOO_HARNESS_MASTER_PASSWORD],
+    ["ODOO_HARNESS_VERSION", c.version],
+    ["ODOO_HARNESS_PROFILE", PROFILE],
+  ]);
+  for (const [key, value] of expectedValues) {
+    if (values.get(key) !== value) {
+      throw new Error("seed state payload did not match the requested harness");
+    }
+  }
+  if (!values.get("ODOO_API_KEY") || !values.get("ODOO_RESTRICTED_API_KEY")) {
+    throw new Error("seed state payload omitted generated credentials");
+  }
+
+  return state;
+}
+
+function writeState(c, state) {
+  withStatePermissionDiagnostic(c, () => {
+    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
+    secureStatePermissions(c);
+    mkdirSync(c.stateDir, { mode: 0o700 });
+    secureStatePermissions(c);
+    writeFileSync(c.stateFile, state, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    secureStatePermissions(c);
+  });
 }
 
 function requireDocker() {
@@ -200,23 +332,17 @@ function up(version) {
 
   if (!stateReady(c)) {
     console.log(`harness: seeding rpc user + API key…`);
-    // The bind-mounted seeder runs as the image's `odoo` user, not as the host
-    // caller. Let it create the per-version directory, then close the shared
-    // root again as soon as the one-shot container exits. Remove a prior
-    // incomplete directory first so its host ownership cannot block the retry.
-    rmSync(c.stateDir, { recursive: true, force: true });
-    mkdirSync(STATE_ROOT, { recursive: true, mode: 0o700 });
-    chmodSync(STATE_ROOT, 0o733);
-    // Mount the whole .state dir; seed writes <version>/env under it.
+    // Remove incomplete host state before generating a fresh handoff. The
+    // container never mounts .state; the host CLI creates the final file.
+    removeState(c);
+    let seedOutput;
     try {
-      dc(
+      seedOutput = dc(
         c,
         [
           "run",
           "--rm",
           "-T",
-          "-v",
-          `${STATE_ROOT}:/harness-state`,
           "-e",
           `ODOO_HARNESS_DB=${c.db}`,
           "-e",
@@ -234,15 +360,31 @@ function up(version) {
           c.db,
           "--no-http",
         ],
-        // Pipe the seed script to `odoo shell` stdin; keep out/err on the console.
-        { input: readSeed(), stdio: ["pipe", "inherit", "inherit"] },
+        // Stdout is reserved for the opaque state marker. Progress and Odoo
+        // diagnostics remain visible on stderr.
+        {
+          encoding: "utf8",
+          input: readSeed(),
+          maxBuffer: 4 * 1024 * 1024,
+          stdio: ["pipe", "pipe", "inherit"],
+        },
       );
-    } finally {
-      chmodSync(STATE_ROOT, 0o700);
+    } catch {
+      fail("seed command failed — see the container diagnostics above.");
     }
-    if (!existsSync(c.stateFile)) {
-      fail(`seed ran but no state file at ${c.stateFile} — check logs.`);
+
+    let state;
+    try {
+      state = decodeSeedState(seedOutput, c);
+    } catch {
+      fail("seed completed without a valid state handoff; no credentials were written.");
     }
+    try {
+      writeState(c, state);
+    } catch {
+      fail(`could not create secure host state at ${c.stateFile}; remove it and retry.`);
+    }
+    console.log(`harness-seed: wrote state file ${c.stateFile}`);
     // GOTCHA: seeding runs in a separate container. If the server was already
     // up (re-seed path), its ormcache (e.g. ir.model.access.check) can hold
     // stale group data indefinitely — restart to flush.
@@ -276,7 +418,7 @@ function reset(version) {
   requireDocker();
   const c = ctx(version);
   dc(c, ["down", "-v", "--remove-orphans"]);
-  rmSync(c.stateDir, { recursive: true, force: true });
+  removeState(c);
   console.log(`harness: ${version} wiped (volumes + state removed).`);
 }
 
