@@ -202,12 +202,14 @@ describe.skipIf(!hasStack)("application workflows (live)", () => {
   );
 
   it.live.skipIf(!hasStack)(
-    "moves a CRM opportunity through won, lost, and recovered states",
+    "moves a CRM opportunity through won, reopened, lost, and recovered states",
     () =>
       Effect.gen(function* () {
         const client = yield* OdooClient;
         const [stageModel, stageId] = yield* client.ref("crm.stage_lead1");
         assert.strictEqual(stageModel, "crm.stage");
+        const initialStages = yield* client.read("crm.stage", [stageId], ["is_won"]);
+        assert.strictEqual(initialStages[0]?.["is_won"], false);
         const leadIds = yield* client.create("crm.lead", {
           name: `${marker()} opportunity`,
           type: "opportunity",
@@ -228,6 +230,9 @@ describe.skipIf(!hasStack)("application workflows (live)", () => {
           const wonStageId = many2OneId(won[0]?.["stage_id"]);
           const wonStages = yield* client.read("crm.stage", [wonStageId], ["is_won"]);
           assert.strictEqual(wonStages[0]?.["is_won"], true);
+
+          const reopened = yield* client.write("crm.lead", leadIds, { stage_id: stageId });
+          assert.strictEqual(reopened, true);
 
           yield* client.call("crm.lead", "action_set_lost", { ids: leadIds });
           const lost = yield* client.read("crm.lead", leadIds, ["active", "probability"]);
@@ -284,12 +289,12 @@ describe.skipIf(!hasStack)("application workflows (live)", () => {
           assert.include(String(children[0]?.["description"]), "updated through RPC");
           assert.strictEqual(many2OneId(children[0]?.["parent_id"]), parentIds[0]);
 
-          const parents = yield* client.read("project.task", parentIds, ["child_ids"]);
-          assert.include(parents[0]?.["child_ids"] as ReadonlyArray<number>, childIds[0]);
-
           yield* client.write("project.task", childIds, { active: true });
           const restored = yield* client.read("project.task", childIds, ["active"]);
           assert.strictEqual(restored[0]?.["active"], true);
+
+          const parents = yield* client.read("project.task", parentIds, ["child_ids"]);
+          assert.include(parents[0]?.["child_ids"] as ReadonlyArray<number>, childIds[0]);
         }).pipe(Effect.ensuring(cleanup));
       }).pipe(Effect.provide(appLayer())),
     TIMEOUT_MS,
