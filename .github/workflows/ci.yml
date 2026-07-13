@@ -124,7 +124,15 @@ jobs:
       # The harness writes a .env-format state file; export every key into the
       # job env so the integration runner sees ODOO_URL/ODOO_DB/... as vars.
       - name: Load harness state into the environment
-        run: cat harness/.state/${{ matrix.version }}/env >> "$GITHUB_ENV"
+        env:
+          HARNESS_STATE: harness/.state/${{ matrix.version }}/env
+        run: |
+          while IFS='=' read -r key value; do
+            case "$key" in
+              *_PASSWORD|*_API_KEY) echo "::add-mask::$value" ;;
+            esac
+          done < "$HARNESS_STATE"
+          cat "$HARNESS_STATE" >> "$GITHUB_ENV"
 
       - name: Integration tests
         run: pnpm test:integration
