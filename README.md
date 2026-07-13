@@ -5,18 +5,18 @@ three wire protocols behind one seam — JSON-RPC, the new JSON-2 API (19+),
 and the cookie-session web route — with a tagged-error taxonomy you can
 `catchTag` instead of parsing messages.
 
-> **Status:** private, pre-1.0, and published through GitHub Packages for
-> a private personal project.
+> **Status:** public and pre-1.0. Releases are published to the public npm
+> registry with provenance.
 
 ## Scope
 
 This package owns generic Odoo transport, authentication/session, schema
 decoding, typed records, connection profiles, and a small set of reusable
-services. It does not own private personal project models, UI, persistence, workflow policy, or
-automatic protocol selection. XML-RPC and generated per-model clients are
-deliberately out of scope.
+services. It does not own application-specific models, UI, persistence,
+workflow policy, or automatic protocol selection. XML-RPC and generated
+per-model clients are deliberately out of scope.
 
-After authenticating to GitHub Packages, consumers install it with:
+Install it from the public npm registry with:
 
 ```
 pnpm add @hodeinavarro/odoo-rpc-ts effect@4.0.0-beta.93
@@ -250,6 +250,9 @@ The full union: `OdooTransportError` · `OdooAuthenticationError` ·
 `OdooServerError` (+ `OdooAccessError`, `OdooValidationError`,
 `OdooMissingError`, `OdooUserError`, `OdooLockError`). Unknown server faults
 are preserved on `OdooServerError` with the raw name — never swallowed.
+`OdooTransportError` retains only a sanitized `{ method, url }` request,
+failure `kind`, safe message, and optional HTTP status; it never exposes the
+platform request, response, headers, body, or cause.
 
 ## Pick your transport
 
@@ -379,8 +382,11 @@ v4, incl. `effect/unstable/http` — is the only peer dependency, so it runs
 wherever Effect does, browser included). Responses are schema-decoded at the boundary
 (`SchemaDriftError` on drift), secrets stay `Redacted`, TLS is never
 disabled, and no URL/db/credential is ever assumed. The wire behavior was
-mapped from the Odoo 16–19 sources and verified against live instances; the
-details — and every architectural decision — live in [AGENTS.md](AGENTS.md).
+mapped from pinned Odoo 16–19 source snapshots and exercised against disposable
+instances. See the reproducible
+[protocol verification record](docs/protocol-verification.md) for the exact
+upstream revisions and source paths; architectural decisions live in
+[AGENTS.md](AGENTS.md).
 
 Every example in this README is compile-checked in CI
 ([test/readme-snippets.test-d.ts](test/readme-snippets.test-d.ts)).

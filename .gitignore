@@ -1,8 +1,11 @@
 node_modules
+.pnpm-store/
 dist
 coverage
 .env*
 *.local
+AGENTS.local.md
+CLAUDE.local.md
 
 # integration harness state (generated env files with secrets)
 harness/.state/

@@ -1,10 +1,10 @@
 # Security policy
 
-This repository is private and does not currently publish supported releases.
-Report suspected vulnerabilities privately by opening a draft repository
-security advisory from GitHub's **Security** tab. Do not open a normal issue
-containing credentials, session cookies, API keys, exploit details, or customer
-data.
+Security fixes target the latest release published on npm. While the project is
+pre-1.0, older releases are not guaranteed to receive backports. Report
+suspected vulnerabilities privately by opening a draft repository security
+advisory from GitHub's **Security** tab. Do not open a public issue containing
+credentials, session cookies, API keys, exploit details, or customer data.
 
 Include the affected revision, Odoo version and protocol, a minimal
 reproduction, and the security impact. Use synthetic secrets and disposable

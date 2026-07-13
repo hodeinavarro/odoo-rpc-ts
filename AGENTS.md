@@ -3,9 +3,10 @@
 A generic, Effect-native, strongly-typed Odoo RPC client for TypeScript.
 Reusable across projects; no assumptions about any particular host app.
 This file is the single source of truth for how code is written here.
-Dense on purpose. All Odoo wire facts below were verified against the
-16.0–19.0 source trees (2026-07); re-verify against source before changing
-protocol code, never against blog posts.
+Dense on purpose. The Odoo wire facts below were verified against the pinned
+16.0–19.0 source snapshots in [docs/protocol-verification.md](docs/protocol-verification.md);
+re-verify against source before changing protocol code, never against blog
+posts.
 
 ## Philosophy (non-negotiable)
 
@@ -32,7 +33,8 @@ Target the exact **Effect 4 beta** pinned in `package.json`. `effect` is an
 exact peer dependency — never a hard dependency; the consumer owns the Effect
 instance and provides its platform HttpClient layer (fetch/node/bun). Effect 4
 betas are not semver-stable, so upgrade the peer, dev dependency, README, and
-private personal project together. Nothing throws in operational code — every operation returns
+any private personal project consumer together. Nothing throws in operational
+code — every operation returns
 `Effect<A, E, R>`; declaration/programmer defects may use Effect's defect
 channel.
 
@@ -59,10 +61,11 @@ channel.
 - **Logging:** Effect `Logger` + `Effect.annotateLogs` wide events.
 - **Orchestration:** `Effect.gen` / `yield*`. Concurrency primitives from
   Effect (`Semaphore`, `Ref`, `Deferred`) — no ad-hoc promises.
-- **Effect 4 decision (2026-07-12): the port is complete.** The package and
-  private personal project both use the same exact beta. All unstable HTTP imports funnel through
-  `src/internal/platform.ts`; keep that choke point and simple Schema checks so
-  beta upgrades remain reviewable. Revisit the pin and APIs at v4 GA.
+- **Effect 4 decision (2026-07-12): the port is complete.** The package and a
+  private personal project use the same exact beta. All unstable HTTP imports
+  funnel through `src/internal/platform.ts`; keep that choke point and simple
+  Schema checks so beta upgrades remain reviewable. Revisit the pin and APIs at
+  v4 GA.
 
 ## Architecture — protocols, two session styles, one seam
 
@@ -91,7 +94,8 @@ OdooClient (high-level typed ops: searchRead, create, write, …)
   FakeTransport     — exported from ./testing for deterministic tests.
 ```
 
-Carry-forward patterns (from earlier private personal project work — reimplement, don't port):
+Carry-forward patterns (from earlier private personal project work —
+reimplement, don't port):
 context-merge choke point (session context `<` global overrides `<` caller
 context, mirroring the web client), success-only single-flight caching
 (`Semaphore(1)` + `Ref<Option<…>>` — retryable on failure, never
@@ -224,7 +228,7 @@ Distinct `_tag` per subtype — best `catchTag` ergonomics; never one blanket
 error discriminated by field. One error file per concern.
 
 ```
-OdooTransportError        # HTTP/network layer (wraps HttpClientError)
+OdooTransportError        # HTTP/network layer (sanitized; no raw request/cause)
 OdooAuthenticationError   # AccessDenied at login, bad key, MFA-pending
 SessionExpiredError       # jsonrpc code 100 / web session death
 SchemaDriftError          # response shape ≠ schema (carries raw payload)

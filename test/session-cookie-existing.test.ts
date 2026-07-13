@@ -47,7 +47,7 @@ const sessionInfo = (uid: number) => ({
     uid,
     user_context: { lang: "en_US", tz: "UTC" },
     server_version_info: [16, 0, 0, "final", 0],
-    username: "hodei",
+    username: "example-user",
   },
 });
 
@@ -86,7 +86,7 @@ describe("CookieSession.fromExisting", () => {
 
       assert.strictEqual(first.uid, 7);
       assert.deepStrictEqual(first.userContext, { lang: "en_US", tz: "UTC" });
-      assert.strictEqual((first.raw as { username?: string }).username, "hodei");
+      assert.strictEqual((first.raw as { username?: string }).username, "example-user");
       assert.strictEqual(first, second);
       // Exactly one get_session_info round trip, carrying the injected cookie.
       assert.strictEqual(rec.urls.length, 1);

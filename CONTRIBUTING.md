@@ -1,12 +1,13 @@
 # Contributing
 
-This is a private, pre-1.0 library published to GitHub Packages for private personal project. Keep
-changes generic: host-app models, workflows, UI, and persistence belong in private personal project,
-while reusable Odoo wire and typed-client behavior belongs here.
+This is a public, pre-1.0 library published to the npm registry. Keep changes
+generic: application models, workflows, UI, and persistence belong in the
+consumer, while reusable Odoo wire and typed-client behavior belongs here.
 
 Read [AGENTS.md](AGENTS.md) before changing protocol behavior. Wire claims must
-be re-verified against the supported Odoo source trees, and protocol changes
-need focused fixture or integration coverage.
+be re-verified against the pinned snapshots in
+[docs/protocol-verification.md](docs/protocol-verification.md), and protocol
+changes need focused fixture or integration coverage.
 
 ## Local verification
 
@@ -29,7 +30,9 @@ pnpm harness down
 ```
 
 CI runs that suite independently for every supported Odoo major. When a public
-API changes, update and compile-check the README examples, publish a new package
-version, then update the exact version and run the gates in private personal project.
+API changes, update and compile-check the README examples, then publish a new
+package version. Update any private personal project consumer separately.
+Follow [docs/publishing.md](docs/publishing.md) for the release process and
+registry prerequisites.
 
 Do not commit generated `dist/`, harness state, credentials, or package tokens.
