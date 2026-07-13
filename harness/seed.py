@@ -16,6 +16,7 @@ import base64
 import inspect
 import os
 import sys
+from datetime import datetime, timedelta
 
 LOGIN = "rpc"
 PASSWORD = "rpc-integration"
@@ -51,8 +52,10 @@ group_ids = [group_system.id, group_user.id, group_partner.id] + [
 # Odoo 19 renamed res.users.groups_id -> group_ids; pick whichever exists.
 groups_field = "group_ids" if "group_ids" in Users._fields else "groups_id"
 
+
 def ensure_user(login, password, name, groups, replace_groups=False):
     user = Users.search([("login", "=", login)], limit=1)
+    email = f"{login}@example.invalid"
     group_command = (
         [(6, 0, groups)] if replace_groups else [(4, group_id) for group_id in groups]
     )
@@ -61,13 +64,14 @@ def ensure_user(login, password, name, groups, replace_groups=False):
             {
                 "name": name,
                 "login": login,
+                "email": email,
                 "password": password,
                 groups_field: [(6, 0, groups)],
             }
         )
         print(f"harness-seed: created user {login} (id={user.id})", file=sys.stderr)
     else:
-        user.write({"password": password, groups_field: group_command})
+        user.write({"email": email, "password": password, groups_field: group_command})
         print(
             f"harness-seed: user {login} already exists — ensured groups/password",
             file=sys.stderr,
@@ -91,17 +95,12 @@ def generate_api_key(key_user, name):
     #   18/19: _generate(scope, name, expiration_date)
     api_keys = env["res.users.apikeys"].with_user(key_user).sudo(False)
     generate = api_keys._generate
-    kwargs = {}
     if "expiration_date" in inspect.signature(generate).parameters:
-        kwargs["expiration_date"] = None
-
-    try:
-        return generate(None, name, **kwargs)
-    except TypeError:
-        try:
-            return generate(None, name, None)
-        except TypeError:
-            return generate(None, name)
+        # 18/19 require an expiration. This non-sudo call also enforces the
+        # user's API-key duration, so keep fixture credentials short-lived.
+        expiration_date = datetime.now() + timedelta(minutes=30)
+        return generate(None, name, expiration_date)
+    return generate(None, name)
 
 
 api_key = generate_api_key(user, KEY_NAME)

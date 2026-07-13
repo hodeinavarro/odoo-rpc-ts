@@ -60,8 +60,9 @@ describe.skipIf(!hasStack)("application workflows (live)", () => {
           groupby: ["state"],
         });
         assert.isAbove(groups.length, 0);
+        // A lazy single-field group renames `__count` to `<groupby>_count` on 16–19.
         assert.strictEqual(
-          groups.reduce((total, group) => total + Number(group["__count"] ?? 0), 0),
+          groups.reduce((total, group) => total + Number(group["state_count"] ?? 0), 0),
           count,
         );
       }).pipe(Effect.provide(appLayer())),

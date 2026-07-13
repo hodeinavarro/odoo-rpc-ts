@@ -35,6 +35,20 @@ const STATE_MARKER = "ODOO_RPC_TS_HARNESS_STATE_V1:";
 const SUPPORTED = ["16.0", "17.0", "18.0", "19.0"];
 const APPLICATIONS = ["account", "crm", "project", "purchase", "sale_management", "stock"];
 const PROFILE = "applications-demo-v2";
+const APPLICATION_NAMES_SQL = APPLICATIONS.map((name) => `'${name}'`).join(", ");
+const APPLICATION_PROFILE_SQL = `
+  SELECT (
+    (SELECT count(*) FROM ir_module_module
+      WHERE name IN (${APPLICATION_NAMES_SQL})
+        AND state = 'installed') = ${APPLICATIONS.length}
+    AND EXISTS (
+      SELECT 1 FROM ir_model_data
+      WHERE module = 'project'
+        AND name = 'project_project_1'
+        AND model = 'project.project'
+    )
+  )::int
+`;
 
 function assertVersion(v) {
   if (!SUPPORTED.includes(v)) {
@@ -123,7 +137,6 @@ function dbInitialised(c) {
 }
 
 function applicationProfileReady(c) {
-  const names = APPLICATIONS.map((name) => `'${name}'`).join(",");
   const out = dcCapture(
     c,
     [
@@ -136,11 +149,11 @@ function applicationProfileReady(c) {
       "-d",
       c.db,
       "-tAc",
-      `SELECT count(*) FROM ir_module_module WHERE name IN (${names}) AND state='installed' AND demo IS TRUE`,
+      APPLICATION_PROFILE_SQL,
     ],
     { soft: true },
   );
-  return out === String(APPLICATIONS.length);
+  return out === "1";
 }
 
 function stateReady(c) {
@@ -310,6 +323,8 @@ function up(version) {
       c.db,
       "-i",
       APPLICATIONS.join(","),
+      // Odoo 19 no longer loads demos implicitly during module init.
+      ...(c.major === "19" ? ["--with-demo"] : []),
       "--stop-after-init",
     ]);
   } else if (!applicationProfileReady(c)) {
