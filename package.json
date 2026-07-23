@@ -14,7 +14,7 @@
   ],
   "license": "MIT",
   "author": "Hodei Navarro",
-  "packageManager": "pnpm@11.12.0",
+  "packageManager": "pnpm@11.16.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/hodeinavarro/odoo-rpc-ts.git"

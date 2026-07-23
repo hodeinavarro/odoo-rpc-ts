@@ -1,5 +1,5 @@
 allowBuilds:
-  msgpackr-extract: set this to true or false
+  msgpackr-extract: false
 verifyDepsBeforeRun: false
 
 # Effect betas are tracked deliberately on this branch; skip the release-age cooldown for them.
