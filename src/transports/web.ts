@@ -92,5 +92,7 @@ export const layer = (
 ): Layer.Layer<Transport, never, CookieSession> => Layer.effect(Transport, make(config));
 
 /** Provide the web `Transport`, resolving `OdooConfig` from the environment. */
-export const layerConfig: Layer.Layer<Transport, Config.ConfigError, CookieSession> =
-  Layer.effect(Transport, Effect.flatMap(OdooConfig, make));
+export const layerConfig: Layer.Layer<Transport, Config.ConfigError, CookieSession> = Layer.effect(
+  Transport,
+  Effect.flatMap(OdooConfig, make),
+);

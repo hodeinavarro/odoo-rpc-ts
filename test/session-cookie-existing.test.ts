@@ -69,7 +69,10 @@ const options = {
 const failTag = <A, E>(exit: Exit.Exit<A, E>): string | undefined =>
   Exit.isFailure(exit)
     ? Option.getOrUndefined(
-        Option.map(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))), (e) => (e as { _tag: string })._tag),
+        Option.map(
+          Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))),
+          (e) => (e as { _tag: string })._tag,
+        ),
       )
     : undefined;
 
@@ -206,7 +209,9 @@ describe("CookieSession.fromExisting", () => {
       const exit = yield* Effect.exit(session.login);
       assert.strictEqual(failTag(exit), "OdooAuthenticationError");
       if (Exit.isFailure(exit)) {
-        const err = Option.getOrThrow(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))));
+        const err = Option.getOrThrow(
+          Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))),
+        );
         assert.instanceOf(err, OdooAuthenticationError);
         assert.notInclude(err.message, "bad;value");
       }

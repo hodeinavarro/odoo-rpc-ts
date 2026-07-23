@@ -9,20 +9,16 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
 import { NodeHttpClient } from "@effect/platform-node";
-import {
-  JsonRpcTransport,
-  OdooClient,
-  OdooClientLive,
-  type Rpc,
-  RpcLive,
-} from "../src/index.ts";
+import { JsonRpcTransport, OdooClient, OdooClientLive, type Rpc, RpcLive } from "../src/index.ts";
 // Records surface is not yet wired into src/index.ts (owner: maintainer); import
 // it from the internal barrel until the public re-export lands.
 import { Many2OneRefOrNull, OdooDateTime } from "../src/records/index.ts";
 import { apiKeyConfig, hasStack, marker, TIMEOUT_MS } from "./support.ts";
 
 const seededJsonRpc = (): Layer.Layer<OdooClient | Rpc> => {
-  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(Layer.provide(NodeHttpClient.layerUndici));
+  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(
+    Layer.provide(NodeHttpClient.layerUndici),
+  );
   const rpc = RpcLive.layerSeeded().pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));
 };

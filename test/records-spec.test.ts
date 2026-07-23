@@ -33,7 +33,9 @@ describe("compileSpecification", () => {
   });
 
   it("compiles a many2one to a nested `{ fields }` subtree", () => {
-    const spec = compileSpecification(defineRecord("res.partner", { company_id: Many2One(Company) }));
+    const spec = compileSpecification(
+      defineRecord("res.partner", { company_id: Many2One(Company) }),
+    );
     assert.deepStrictEqual(spec, {
       id: {},
       company_id: { fields: { id: {}, name: {} } },
@@ -51,7 +53,9 @@ describe("compileSpecification", () => {
   });
 
   it("omits the limit key entirely when an x2many declares none", () => {
-    const spec = compileSpecification(defineRecord("res.partner", { child_ids: One2Many(Contact) }));
+    const spec = compileSpecification(
+      defineRecord("res.partner", { child_ids: One2Many(Contact) }),
+    );
     assert.deepStrictEqual(spec, {
       id: {},
       child_ids: { fields: { id: {}, name: {} } },

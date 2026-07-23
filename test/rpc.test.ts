@@ -10,7 +10,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 const lastContext = (log: ReadonlyArray<{ readonly kwargs: Record<string, unknown> }>) =>
   log[log.length - 1]?.kwargs["context"];
 
@@ -130,7 +129,9 @@ describe("Rpc.callKw — context merge", () => {
 
       assert.isTrue(Exit.isFailure(exit));
       if (Exit.isFailure(exit)) {
-        const die = Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Die" ? [r.defect] : [])));
+        const die = Arr.head(
+          exit.cause.reasons.flatMap((r) => (r._tag === "Die" ? [r.defect] : [])),
+        );
         assert.isTrue(Option.isSome(die));
         if (Option.isSome(die)) {
           assert.include(String(die.value), "kwargs.context");

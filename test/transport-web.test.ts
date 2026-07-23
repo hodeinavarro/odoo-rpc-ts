@@ -13,7 +13,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 interface Canned {
   readonly body: unknown;
   readonly setCookie?: string | undefined;

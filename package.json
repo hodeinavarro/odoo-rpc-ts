@@ -1,7 +1,7 @@
 {
   "name": "@hodeinavarro/odoo-rpc-ts",
   "version": "0.3.1",
-  "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript \u2014 JSON-RPC, JSON-2, and cookie-session transports for Odoo 16\u201319 with a tagged-error taxonomy.",
+  "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript — JSON-RPC, JSON-2, and cookie-session transports for Odoo 16–19 with a tagged-error taxonomy.",
   "keywords": [
     "api-client",
     "effect",
@@ -12,16 +12,15 @@
     "rpc",
     "typescript"
   ],
-  "license": "MIT",
-  "author": "Hodei Navarro",
-  "packageManager": "pnpm@11.16.0",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/hodeinavarro/odoo-rpc-ts.git"
-  },
   "homepage": "https://github.com/hodeinavarro/odoo-rpc-ts#readme",
   "bugs": {
     "url": "https://github.com/hodeinavarro/odoo-rpc-ts/issues"
+  },
+  "license": "MIT",
+  "author": "Hodei Navarro",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hodeinavarro/odoo-rpc-ts.git"
   },
   "files": [
     "dist",
@@ -60,12 +59,13 @@
     "@effect/vitest": "4.0.0-beta.101",
     "@types/node": "^26.1.1",
     "effect": "4.0.0-beta.101",
-    "oxfmt": "^0.58.0",
-    "oxlint": "^1.73.0",
+    "oxfmt": "^0.59.0",
+    "oxlint": "^1.74.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "effect": "4.0.0-beta.101"
-  }
+  },
+  "packageManager": "pnpm@11.16.0"
 }

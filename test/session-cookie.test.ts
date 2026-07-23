@@ -11,7 +11,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 // ---------------------------------------------------------------------------
 // A scripted HttpClient: each entry is consumed in order and its cookie header
 // (what the client sent) is recorded so tests can assert cookie replay.

@@ -139,13 +139,9 @@ export const make = <Row extends HasId>(
           return Effect.succeed(makeRelatedMap<A>([]));
         }
         return rpc
-          .callKw(
-            relatedModel,
-            "read",
-            [],
-            fields === undefined ? {} : { fields },
-            { ids: relatedIds },
-          )
+          .callKw(relatedModel, "read", [], fields === undefined ? {} : { fields }, {
+            ids: relatedIds,
+          })
           .pipe(
             Effect.flatMap(decodeRows(schema, `${relatedModel}.read`)),
             Effect.map((relatedRows) => makeRelatedMap(relatedRows)),

@@ -188,13 +188,7 @@ void testLayer;
 
 // --- typed records: declared prefetch ----------------------------------------
 
-import {
-  Command,
-  defineRecord,
-  Many2One,
-  Many2OneRefOrNull,
-  OdooDateTime,
-} from "../src/index.ts";
+import { Command, defineRecord, Many2One, Many2OneRefOrNull, OdooDateTime } from "../src/index.ts";
 
 const CompanyRec = defineRecord("res.company", { name: Schema.String });
 const PartnerRec = defineRecord("res.partner", {

@@ -14,7 +14,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 const Partner = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
@@ -48,10 +47,7 @@ const runWithLog = <A, E>(
   Effect.gen(function* () {
     const fake = FakeTransport.make(handlers);
     const layer = clientLayer.pipe(Layer.provide(rpcLayer), Layer.provide(fake.layer));
-    const value = yield* Effect.provide(
-      OdooClient.pipe(Effect.flatMap(build)),
-      layer,
-    );
+    const value = yield* Effect.provide(OdooClient.pipe(Effect.flatMap(build)), layer);
     const log = yield* Ref.get(fake.callLog);
     return { value, log };
   });
@@ -85,9 +81,11 @@ describe("fetchRelated — exactly one batched read", () => {
   it.effect("issues ONE read over the DISTINCT non-null ids", () =>
     Effect.gen(function* () {
       const { value, log } = yield* runWithLog(baseHandlers(PARTNER_ROWS), (c) =>
-        c.searchRecordsTyped("res.partner", {}, Partner).pipe(
-          Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company, ["name"])),
-        ),
+        c
+          .searchRecordsTyped("res.partner", {}, Partner)
+          .pipe(
+            Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company, ["name"])),
+          ),
       );
       const reads = readCalls(log);
       assert.strictEqual(reads.length, 1);
@@ -110,9 +108,9 @@ describe("fetchRelated — exactly one batched read", () => {
         { id: 2, name: "Bob", company_id: false },
       ];
       const { value, log } = yield* runWithLog(baseHandlers(allEmpty), (c) =>
-        c.searchRecordsTyped("res.partner", {}, Partner).pipe(
-          Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company)),
-        ),
+        c
+          .searchRecordsTyped("res.partner", {}, Partner)
+          .pipe(Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company))),
       );
       assert.strictEqual(readCalls(log).length, 0);
       assert.strictEqual(value.size, 0);
@@ -122,9 +120,9 @@ describe("fetchRelated — exactly one batched read", () => {
   it.effect("omits the fields kwarg entirely when none are given", () =>
     Effect.gen(function* () {
       const { log } = yield* runWithLog(baseHandlers(PARTNER_ROWS), (c) =>
-        c.searchRecordsTyped("res.partner", {}, Partner).pipe(
-          Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company)),
-        ),
+        c
+          .searchRecordsTyped("res.partner", {}, Partner)
+          .pipe(Effect.flatMap((rs) => rs.fetchRelated("company_id", "res.company", Company))),
       );
       const reads = readCalls(log);
       assert.strictEqual(reads.length, 1);
@@ -137,9 +135,11 @@ describe("joinRelated — paired rows, one call", () => {
   it.effect("returns (row, related | null) pairs including the empty case", () =>
     Effect.gen(function* () {
       const { value: pairs, log } = yield* runWithLog(baseHandlers(PARTNER_ROWS), (c) =>
-        c.searchRecordsTyped("res.partner", {}, Partner).pipe(
-          Effect.flatMap((rs) => rs.joinRelated("company_id", "res.company", Company, ["name"])),
-        ),
+        c
+          .searchRecordsTyped("res.partner", {}, Partner)
+          .pipe(
+            Effect.flatMap((rs) => rs.joinRelated("company_id", "res.company", Company, ["name"])),
+          ),
       );
       assert.strictEqual(readCalls(log).length, 1);
       assert.strictEqual(pairs.length, 3);

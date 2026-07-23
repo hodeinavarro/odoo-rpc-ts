@@ -61,7 +61,10 @@ const sessionInfo = (uid: number) => ({
 const failTag = <A, E>(exit: Exit.Exit<A, E>): string | undefined =>
   Exit.isFailure(exit)
     ? Option.getOrUndefined(
-        Option.map(Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))), (e) => (e as { _tag: string })._tag),
+        Option.map(
+          Arr.head(exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))),
+          (e) => (e as { _tag: string })._tag,
+        ),
       )
     : undefined;
 

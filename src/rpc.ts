@@ -28,10 +28,9 @@ const omitContext = (kwargs: OdooContext): OdooContext => {
  * Provided by the auth/transport layer that owns the session; absent here it
  * defaults to `{}`. It is read once, when the {@link Rpc} layer is built.
  */
-export class GlobalContext extends Context.Service<
-  GlobalContext,
-  OdooContext
->()("odoo-rpc-ts/GlobalContext") {}
+export class GlobalContext extends Context.Service<GlobalContext, OdooContext>()(
+  "odoo-rpc-ts/GlobalContext",
+) {}
 
 /**
  * The `call_kw` choke point. Every high-level operation funnels through here so

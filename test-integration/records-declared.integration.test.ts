@@ -15,13 +15,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Schema, Exit } from "effect";
 import { NodeHttpClient } from "@effect/platform-node";
-import {
-  JsonRpcTransport,
-  OdooClient,
-  OdooClientLive,
-  type Rpc,
-  RpcLive,
-} from "../src/index.ts";
+import { JsonRpcTransport, OdooClient, OdooClientLive, type Rpc, RpcLive } from "../src/index.ts";
 import { defineRecord, Many2One, One2Many } from "../src/records/index.ts";
 import { apiKeyConfig, hasStack, majorVersion, marker, TIMEOUT_MS } from "./support.ts";
 
@@ -32,9 +26,10 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 const seededJsonRpc = (): Layer.Layer<OdooClient | Rpc> => {
-  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(Layer.provide(NodeHttpClient.layerUndici));
+  const transport = JsonRpcTransport.layer(apiKeyConfig()).pipe(
+    Layer.provide(NodeHttpClient.layerUndici),
+  );
   const rpc = RpcLive.layerSeeded().pipe(Layer.provide(transport));
   return OdooClientLive.layer.pipe(Layer.provideMerge(rpc));
 };
@@ -130,12 +125,10 @@ describe.skipIf(!hasStack)("declared-prefetch typed records (live)", () => {
             .pipe(Effect.exit);
           assert.isTrue(exit._tag === "Failure");
           const err = firstError(exit);
-      if (err !== undefined) {
+          if (err !== undefined) {
             assert.strictEqual(err._tag, "ProtocolUnsupportedError");
           }
-        }).pipe(
-          Effect.ensuring(client.unlink("res.partner", [partnerId!]).pipe(Effect.ignore)),
-        );
+        }).pipe(Effect.ensuring(client.unlink("res.partner", [partnerId!]).pipe(Effect.ignore)));
       }).pipe(Effect.provide(seededJsonRpc())),
     TIMEOUT_MS,
   );

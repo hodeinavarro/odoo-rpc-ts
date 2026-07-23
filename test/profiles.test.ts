@@ -298,7 +298,11 @@ describe("Profiles — adversarial-review regressions", () => {
       const secrets = yield* SecretStore;
       yield* profiles.saveProfile("prod", passwordConfig, "web");
       // TOTP got enabled; the user switches this profile to the harvested-cookie flow.
-      yield* profiles.saveSessionProfile("prod", new URL("https://odoo.test/"), Redacted.make("cookie-v1"));
+      yield* profiles.saveSessionProfile(
+        "prod",
+        new URL("https://odoo.test/"),
+        Redacted.make("cookie-v1"),
+      );
       // The password secret must be GONE from the keyring, not orphaned.
       const orphan = yield* secrets.get("prod:password");
       assert.isTrue(Option.isNone(orphan));
@@ -311,7 +315,11 @@ describe("Profiles — adversarial-review regressions", () => {
     Effect.gen(function* () {
       const profiles = yield* Profiles;
       const secrets = yield* SecretStore;
-      yield* profiles.saveSessionProfile("prod", new URL("https://odoo.test/"), Redacted.make("cookie-v1"));
+      yield* profiles.saveSessionProfile(
+        "prod",
+        new URL("https://odoo.test/"),
+        Redacted.make("cookie-v1"),
+      );
       yield* profiles.saveProfile("prod", apiKeyConfig, "json-rpc");
       const orphan = yield* secrets.get("prod:session");
       assert.isTrue(Option.isNone(orphan));

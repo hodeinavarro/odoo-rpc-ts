@@ -113,22 +113,24 @@ export type FieldInput =
   | One2ManyDecl<any, any>;
 
 /** The decoded (`Type`) value a declared field yields. */
-type FieldType<T> = T extends Many2OneDecl<infer A, infer _I>
-  ? A | null
-  : T extends One2ManyDecl<infer A, infer _I>
-    ? ReadonlyArray<A>
-    : T extends Schema.Top
-      ? T["Type"]
-      : never;
+type FieldType<T> =
+  T extends Many2OneDecl<infer A, infer _I>
+    ? A | null
+    : T extends One2ManyDecl<infer A, infer _I>
+      ? ReadonlyArray<A>
+      : T extends Schema.Top
+        ? T["Type"]
+        : never;
 
 /** The wire (`Encoded`) value a declared field maps from. */
-type FieldEncoded<T> = T extends Many2OneDecl<infer _A, infer I>
-  ? I | false
-  : T extends One2ManyDecl<infer _A, infer I>
-    ? ReadonlyArray<I>
-    : T extends Schema.Top
-      ? T["Encoded"]
-      : never;
+type FieldEncoded<T> =
+  T extends Many2OneDecl<infer _A, infer I>
+    ? I | false
+    : T extends One2ManyDecl<infer _A, infer I>
+      ? ReadonlyArray<I>
+      : T extends Schema.Top
+        ? T["Encoded"]
+        : never;
 
 /** The decoded row type of a declaration `F` — always carries `id: number`. */
 export type RowType<F extends Record<string, FieldInput>> = {

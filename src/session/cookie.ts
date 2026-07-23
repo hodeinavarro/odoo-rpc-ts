@@ -121,10 +121,9 @@ export interface CookieSessionService {
   readonly peek: Effect.Effect<Option.Option<OdooSessionInfo>>;
 }
 
-export class CookieSession extends Context.Service<
-  CookieSession,
-  CookieSessionService
->()("odoo-rpc-ts/CookieSession") {}
+export class CookieSession extends Context.Service<CookieSession, CookieSessionService>()(
+  "odoo-rpc-ts/CookieSession",
+) {}
 
 /**
  * One session-info round trip: POST a JSON-RPC envelope, decode the response,
@@ -322,11 +321,8 @@ export const layer = (
   Layer.effect(CookieSession, make(config));
 
 /** Provide `CookieSession`, resolving `OdooConfig` from the environment. */
-export const layerConfig: Layer.Layer<
-  CookieSession,
-  Config.ConfigError,
-  HttpClient.HttpClient
-> = Layer.effect(CookieSession, Effect.flatMap(OdooConfig, make));
+export const layerConfig: Layer.Layer<CookieSession, Config.ConfigError, HttpClient.HttpClient> =
+  Layer.effect(CookieSession, Effect.flatMap(OdooConfig, make));
 
 /**
  * Options for {@link fromExisting}: adopt a `session_id` cookie that was

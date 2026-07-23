@@ -70,10 +70,7 @@ describe.skipIf(!hasStack)("report service (live)", () => {
         }).pipe(Effect.flip);
         // Odoo answers the unknown-report route with a 500 (accepted path);
         // 404/403 would map to Missing/Access. Any is a typed, non-throwing fail.
-        assert.include(
-          ["OdooTransportError", "OdooMissingError", "OdooAccessError"],
-          error._tag,
-        );
+        assert.include(["OdooTransportError", "OdooMissingError", "OdooAccessError"], error._tag);
       }).pipe(Effect.provide(sessionLayer)),
     TIMEOUT_MS,
   );

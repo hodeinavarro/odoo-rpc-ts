@@ -140,8 +140,8 @@ import { Schema } from "effect"
 const Company = defineRecord("res.company", { name: Schema.String })
 const Partner = defineRecord("res.partner", {
   name: Schema.String,
-  create_date: OdooDateTime,            // parsed as UTC, never localized
-  company_id: Many2One(Company),        // row.company_id?.name — already fetched
+  create_date: OdooDateTime, // parsed as UTC, never localized
+  company_id: Many2One(Company), // row.company_id?.name — already fetched
 })
 
 const rows = Effect.gen(function* () {
@@ -167,7 +167,7 @@ import { Many2OneRefOrNull, OdooClient } from "@hodeinavarro/odoo-rpc-ts"
 const PartnerRow = Schema.Struct({
   id: Schema.Number,
   name: Schema.String,
-  company_id: Many2OneRefOrNull,        // Odoo's [id, name] pair; false -> null
+  company_id: Many2OneRefOrNull, // Odoo's [id, name] pair; false -> null
 })
 const CompanyRow = Schema.Struct({ id: Schema.Number, name: Schema.String })
 

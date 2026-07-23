@@ -11,7 +11,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 interface DecodedRequest {
   readonly service: string;
   readonly method: string;

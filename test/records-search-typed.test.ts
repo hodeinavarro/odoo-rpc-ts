@@ -25,7 +25,6 @@ const firstError = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
     ? exit.cause.reasons.flatMap((r) => (r._tag === "Fail" ? [r.error] : []))[0]
     : undefined;
 
-
 const Company = defineRecord("res.company", { name: Schema.String });
 const Contact = defineRecord("res.partner.child", { name: Schema.String });
 const Partner = defineRecord("res.partner", {
@@ -36,7 +35,12 @@ const Partner = defineRecord("res.partner", {
 const FlatPartner = defineRecord("res.partner", { name: Schema.String, email: Schema.String });
 
 const PARTNER_RECORDS = [
-  { id: 1, name: "Alice", company_id: { id: 100, name: "ACME" }, child_ids: [{ id: 9, name: "Kid" }] },
+  {
+    id: 1,
+    name: "Alice",
+    company_id: { id: 100, name: "ACME" },
+    child_ids: [{ id: 9, name: "Kid" }],
+  },
   { id: 2, name: "Bob", company_id: false, child_ids: [] },
 ];
 
@@ -98,7 +102,10 @@ describe("searchTyped — one web_search_read, exact spec, nested decode", () =>
       const exit = yield* runWithLog(
         { "res.partner": { web_search_read: () => ({ length: 1, records: leaky }) } },
         (c) => c.searchTyped(Partner),
-      ).pipe(Effect.map((r) => r.value), Effect.exit);
+      ).pipe(
+        Effect.map((r) => r.value),
+        Effect.exit,
+      );
       assert.isTrue(Exit.isFailure(exit));
       const err = firstError(exit);
       if (err !== undefined) {

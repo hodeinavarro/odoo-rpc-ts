@@ -16,13 +16,7 @@ export {
   OdooDateTime,
   OdooDateTimeOrNull,
 } from "./relations.ts";
-export {
-  collectRefIds,
-  makeRelatedMap,
-  refId,
-  type RefOrId,
-  type RelatedMap,
-} from "./related.ts";
+export { collectRefIds, makeRelatedMap, refId, type RefOrId, type RelatedMap } from "./related.ts";
 export {
   make as makeTypedRecordSet,
   type HasId,

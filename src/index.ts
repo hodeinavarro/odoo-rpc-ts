@@ -121,11 +121,7 @@ export * as CookieSessionLive from "./session/cookie.ts";
 export { retryOnSessionExpired } from "./combinators/retryOnSessionExpired.ts";
 
 // Typed x2many write commands.
-export {
-  Command,
-  type CommandTuple,
-  type X2ManyCommands,
-} from "./commands.ts";
+export { Command, type CommandTuple, type X2ManyCommands } from "./commands.ts";
 
 // Database administration (master-password gated; Node-oriented buffers).
 export * as DbService from "./services/db.ts";

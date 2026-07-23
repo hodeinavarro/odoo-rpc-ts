@@ -165,9 +165,7 @@ export const OdooDateTime: Schema.Codec<Date, string> = Schema.String.pipe(
  * `SchemaIssue.Issue` directly — the v4 analogue of v3's
  * `ParseResult.decodeUnknown` delegation.
  */
-const orFalseNull = (
-  base: Schema.Codec<Date, string>,
-): Schema.Codec<Date | null, string | false> =>
+const orFalseNull = (base: Schema.Codec<Date, string>): Schema.Codec<Date | null, string | false> =>
   Schema.Union([Schema.String, Schema.Literal(false)]).pipe(
     Schema.decodeTo(
       Schema.NullOr(Schema.Date),
