@@ -11,7 +11,7 @@ changes need focused fixture or integration coverage.
 
 ## Local verification
 
-Use Node 26 and pnpm 11.12.0, then run:
+Use Node 26 and pnpm 11.16.0, then run:
 
 ```sh
 pnpm install --frozen-lockfile
