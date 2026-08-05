@@ -1,6 +1,6 @@
 {
   "name": "@hodeinavarro/odoo-rpc-ts",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript — JSON-RPC, JSON-2, and cookie-session transports for Odoo 16–19 with a tagged-error taxonomy.",
   "keywords": [
     "api-client",
