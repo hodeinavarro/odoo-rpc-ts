@@ -19,8 +19,8 @@ per-model clients are deliberately out of scope.
 Install it from the public npm registry with:
 
 ```
-pnpm add @hodeinavarro/odoo-rpc-ts effect@4.0.0-beta.101
-pnpm add @effect/platform-node@4.0.0-beta.101   # or run in the browser with FetchHttpClient
+pnpm add @hodeinavarro/odoo-rpc-ts effect@4.0.0-beta.103
+pnpm add @effect/platform-node@4.0.0-beta.103   # or run in the browser with FetchHttpClient
 ```
 
 Effect 4 is in beta and moves between betas — pin it **exact** (no caret) and

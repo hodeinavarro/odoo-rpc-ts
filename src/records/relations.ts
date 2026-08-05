@@ -5,7 +5,7 @@
  * many2one pairs, `false` empties, naive datetime strings) into ergonomic,
  * fully-typed domain values, failing loudly as schema drift on anything else.
  */
-import { Effect, Option, Schema, SchemaIssue, SchemaParser, SchemaTransformation } from "effect";
+import { Effect, Schema, SchemaIssue, SchemaParser, SchemaTransformation } from "effect";
 
 // --- many2one references ----------------------------------------------------
 
@@ -92,9 +92,12 @@ const formatUtcDateTime = (date: Date): string =>
     2,
   )}`;
 
-/** A decode/encode failure as a v4 schema issue on the offending value. */
+/**
+ * A decode/encode failure as a v4 schema issue. Built-in issues no longer
+ * carry the rejected value, so it rides as a custom `actual` annotation.
+ */
 const invalid = (value: unknown, message: string): SchemaIssue.InvalidValue =>
-  new SchemaIssue.InvalidValue(Option.some(value), { message });
+  new SchemaIssue.InvalidValue({ message, actual: value });
 
 /**
  * Odoo `Date` field: `"YYYY-MM-DD"` → a `Date` at UTC midnight of that day.

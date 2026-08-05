@@ -1,4 +1,4 @@
-import { Config, Effect, Option, Schema, SchemaIssue, type Redacted } from "effect";
+import { Config, Effect, Schema, SchemaIssue, type Redacted } from "effect";
 
 /**
  * How the client authenticates. A tagged union so downstream auth layers
@@ -32,11 +32,12 @@ export interface OdooConfig {
  * A config validation failure carrying a caller-selected diagnostic value.
  * Secret-bearing inputs must pass a fixed redacted placeholder. v4's
  * `ConfigError` wraps a `SchemaError` (data found but invalid) — the analogue
- * of v3's `ConfigError.InvalidData`.
+ * of v3's `ConfigError.InvalidData`. Built-in issues no longer carry the
+ * rejected value, so the diagnostic rides as a custom `actual` annotation.
  */
 const invalidData = (value: unknown, message: string): Config.ConfigError =>
   new Config.ConfigError(
-    new Schema.SchemaError(new SchemaIssue.InvalidValue(Option.some(value), { message })),
+    new Schema.SchemaError(new SchemaIssue.InvalidValue({ message, actual: value })),
   );
 
 /**
