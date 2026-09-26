@@ -13,6 +13,14 @@ USER root
 # fetch pulls EXACTLY this ref's tree (one commit, no packs), not gigabytes.
 ARG ODOO_HARNESS_REF=16.0
 RUN set -eux; \
+    . /etc/os-release; \
+    if [ "${VERSION_CODENAME}" = bullseye ]; then \
+        # The EOL security index advertises missing files (Debian #1147150).
+        # This disposable harness uses the signed main archive for build tools.
+        printf '%s\n' 'deb https://archive.debian.org/debian bullseye main' > /etc/apt/sources.list; \
+        rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; \
+        rm -rf /var/lib/apt/lists/*; \
+    fi; \
     apt-get update && apt-get install -y --no-install-recommends git gettext-base; \
     mkdir -p /opt/odoo; cd /opt/odoo; \
     git init -q; \

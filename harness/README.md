@@ -8,6 +8,12 @@ user and a plain internal-user principal with global API keys, then writes a
 `.env` state file. Two versions run
 **concurrently** — distinct compose projects, images, volumes and host ports.
 
+The Debian Bullseye base used by Odoo 16 installs its harness build tools from
+the signed regular Debian archive. Its end-of-life security index advertises
+unavailable packages ([Debian #1147150](https://bugs.debian.org/1147150)).
+Other base distributions retain their APT sources. This exception applies only
+to the disposable integration image; it is not a production image policy.
+
 ```sh
 pnpm harness up 16.0        # build + start + init + seed  → harness/.state/16.0/env
 pnpm harness status         # which versions are running / seeded
