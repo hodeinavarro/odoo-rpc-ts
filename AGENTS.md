@@ -3,8 +3,8 @@
 A generic, Effect-native, strongly-typed Odoo RPC client for TypeScript.
 Reusable across projects; no assumptions about any particular host app.
 Use [the Effect reference](docs/agent-effect.md) for services, schemas, HTTP or
-beta upgrades, and [the protocol reference](docs/agent-protocol.md) for transport,
-authentication, session, capability or error changes. Wire evidence is pinned in
+release candidate upgrades, and [the protocol reference](docs/agent-protocol.md)
+for transport, authentication, session, capability or error changes. Wire evidence is pinned in
 [protocol verification](docs/protocol-verification.md); recheck the relevant
 Odoo source when changing wire behavior.
 
@@ -50,8 +50,9 @@ Odoo source when changing wire behavior.
   then `pnpm test:integration`; `pnpm harness down` tears it down. CI runs the
   four-version matrix independently; unit tests never require Docker.
 - **Package:** ESM-only, `"type": "module"`, pnpm. `exports` map with a
-  `./testing` entry point. Exact `effect` beta in `peerDependencies` and
-  devDependencies; platform implementations only in devDependencies.
+  `./testing` entry point. Exact `effect` release candidate in
+  `peerDependencies` and devDependencies; platform implementations only in
+  devDependencies.
 
 ## Formatting & commits
 

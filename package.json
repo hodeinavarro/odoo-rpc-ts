@@ -1,6 +1,6 @@
 {
   "name": "@hodeinavarro/odoo-rpc-ts",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Effect-native, strongly-typed Odoo RPC client for TypeScript — JSON-RPC, JSON-2, and cookie-session transports for Odoo 16–19 with a tagged-error taxonomy.",
   "keywords": [
     "api-client",
@@ -55,17 +55,17 @@
     "fmt": "oxfmt"
   },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0-beta.103",
-    "@effect/vitest": "4.0.0-beta.103",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.1",
-    "effect": "4.0.0-beta.103",
+    "effect": "4.0.0-rc.112",
     "oxfmt": "^0.59.0",
     "oxlint": "^1.74.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
-    "effect": "4.0.0-beta.103"
+    "effect": "4.0.0-rc.112"
   },
   "packageManager": "pnpm@11.16.0"
 }

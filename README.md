@@ -19,12 +19,28 @@ per-model clients are deliberately out of scope.
 Install it from the public npm registry with:
 
 ```
-pnpm add @hodeinavarro/odoo-rpc-ts effect@4.0.0-beta.103
-pnpm add @effect/platform-node@4.0.0-beta.103   # or run in the browser with FetchHttpClient
+pnpm add --save-exact @hodeinavarro/odoo-rpc-ts effect@4.0.0-rc.112
 ```
 
-Effect 4 is in beta and moves between betas — pin it **exact** (no caret) and
-upgrade deliberately.
+Effect 4 is a release candidate and moves between candidates — pin it **exact**
+(no caret) and upgrade deliberately.
+
+Before adding `@effect/platform-node`, pin its transitive shared package to the
+same release candidate in the consuming project's `pnpm-workspace.yaml`:
+
+```yaml
+overrides:
+  "@effect/platform-node-shared": "4.0.0-rc.112"
+```
+
+The platform package's dependency range can otherwise select a newer,
+incompatible release candidate.
+
+Then install the Node platform client (or use `FetchHttpClient` in the browser):
+
+```
+pnpm add --save-exact @effect/platform-node@4.0.0-rc.112
+```
 
 ## Quick start
 
@@ -395,7 +411,7 @@ Every example in this README is compile-checked in CI
 
 🚧 Pre-1.0. Core is implemented, the unit suite covers the shared API, and CI
 runs the integration suite against Odoo 16, 17, 18, and 19. The API may still
-move while Effect 4 remains in beta.
+move while Effect 4 remains a release candidate.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the local gates and
 [SECURITY.md](SECURITY.md) for private vulnerability reporting.
