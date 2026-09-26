@@ -1,16 +1,16 @@
 # Effect implementation reference
 
-Use when changing Effect services, schemas, HTTP, configuration or the beta pin.
-Package paths are relative to the repository root.
+Use when changing Effect services, schemas, HTTP, configuration or the release
+candidate pin. Package paths are relative to the repository root.
 
 ## Effect-TS is the whole-app paradigm
 
-Target the exact **Effect 4 beta** pinned in `package.json`. `effect` is an
-exact peer dependency — never a hard dependency; the consumer owns the Effect
-instance and provides its platform HttpClient layer (fetch/node/bun). Effect 4
-betas are not semver-stable, so upgrade the peer, dev dependency, README, and
-any private personal project consumer together. Nothing throws in operational
-code — every operation returns
+Target the exact **Effect 4 release candidate** pinned in `package.json`.
+`effect` is an exact peer dependency — never a hard dependency; the consumer
+owns the Effect instance and provides its platform HttpClient layer
+(fetch/node/bun). Effect 4 release candidates are not semver-stable, so upgrade
+the peer, dev dependency, workspace override, README pins, and any private
+personal project consumer together. Nothing throws in operational code — every operation returns
 `Effect<A, E, R>`; declaration/programmer defects may use Effect's defect
 channel.
 
@@ -38,7 +38,7 @@ channel.
 - **Orchestration:** `Effect.gen` / `yield*`. Concurrency primitives from
   Effect (`Semaphore`, `Ref`, `Deferred`) — no ad-hoc promises.
 - **Effect 4 decision (2026-07-12): the port is complete.** The package and a
-  private personal project use the same exact beta. All unstable HTTP imports
-  funnel through `src/internal/platform.ts`; keep that choke point and simple
-  Schema checks so beta upgrades remain reviewable. Revisit the pin and APIs at
-  v4 GA.
+  private personal project use the same exact release candidate. All unstable
+  HTTP imports funnel through `src/internal/platform.ts`; keep that choke point
+  and simple Schema checks so release candidate upgrades remain reviewable.
+  Revisit the pin and APIs at v4 GA.
